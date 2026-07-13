@@ -746,16 +746,25 @@ async function openDetail(id) {
   $('d-email').innerHTML = currentLead.email
     ? '<a href="mailto:' + esc(currentLead.email) + '">' + esc(currentLead.email) + '</a>' : '—';
 
-  const digits = (currentLead.phone || '').replace(/[^0-9]/g, '');
-  $('d-phone').innerHTML = currentLead.phone
-    ? '<a href="tel:' + digits + '">' + esc(currentLead.phone) + '</a>' +
+  // tel: needs the + (tells the dialer it's a full international
+  // number); wa.me wants digits WITHOUT the + . Two formats, one phone.
+  const rawPhone = (currentLead.phone || '').trim();
+  let digits = rawPhone.replace(/[^0-9]/g, '');
+  if (digits.length === 10) digits = '91' + digits;   // bare Indian mobile → add country code
+  const telNum = '+' + digits;
+  $('d-phone').innerHTML = rawPhone
+    ? '<a href="tel:' + telNum + '">' + esc(rawPhone) + '</a>' +
       (digits.length >= 11
         ? ' &nbsp;·&nbsp; <a href="https://wa.me/' + digits + '" target="_blank">WhatsApp ↗</a>'
         : ' <span class="muted">(add country code for WhatsApp link)</span>')
     : '—';
 
-  $('d-linkedin').innerHTML = currentLead.linkedin_url
-    ? '<a href="' + esc(currentLead.linkedin_url) + '" target="_blank">profile ↗</a>' : '—';
+  // URLs saved without https:// would open as broken relative links —
+  // normalize them before building the anchor.
+  let li = (currentLead.linkedin_url || '').trim();
+  if (li && !/^https?:\/\//i.test(li)) li = 'https://' + li;
+  $('d-linkedin').innerHTML = li
+    ? '<a href="' + esc(li) + '" target="_blank">profile ↗</a>' : '—';
   $('d-source').textContent = currentLead.source || '—';
   $('d-notes').textContent = currentLead.notes || '—';
   $('d-status').value = currentLead.status;
