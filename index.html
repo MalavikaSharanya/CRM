@@ -9,10 +9,46 @@
 
   body {
     font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
-    background: #f4f5f7;
+    background: linear-gradient(135deg, #eef1f7 0%, #f7f4ee 55%, #eef5f2 100%);
     color: #1c1e21;
     line-height: 1.5;
     font-size: 15px;
+    min-height: 100vh;
+  }
+
+  /* Two soft color glows drifting behind everything — the "space" */
+  body::before, body::after {
+    content: "";
+    position: fixed;
+    width: 55vw; height: 55vw;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.35;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  body::before {
+    background: radial-gradient(circle, #a5b4fc, transparent 65%);
+    top: -18vw; left: -12vw;
+    animation: drift1 22s ease-in-out infinite alternate;
+  }
+
+  body::after {
+    background: radial-gradient(circle, #99e6d0, transparent 65%);
+    bottom: -20vw; right: -14vw;
+    animation: drift2 26s ease-in-out infinite alternate;
+  }
+
+  @keyframes drift1 { to { transform: translate(9vw, 7vh) scale(1.15); } }
+  @keyframes drift2 { to { transform: translate(-8vw, -6vh) scale(1.1); } }
+
+  /* Entrance animations */
+  @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+  @keyframes popIn { from { opacity: 0; transform: translateY(12px) scale(0.96); } to { opacity: 1; transform: none; } }
+
+  .stats, .tabs, .game, #view-leads .card, #view-detail .card, .import-box, .activity {
+    animation: rise 0.45s ease both;
   }
 
   #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -20,6 +56,8 @@
   .login-box {
     background: #fff; padding: 40px; width: 90%; max-width: 380px;
     border: 1px solid #e0e2e6; border-radius: 10px;
+    animation: popIn 0.4s ease;
+    box-shadow: 0 20px 50px rgba(28,30,33,0.1);
   }
 
   .login-box h1 { font-size: 22px; margin-bottom: 4px; }
@@ -36,9 +74,11 @@
   button {
     font-family: inherit; font-size: 14px; padding: 10px 18px;
     background: #1c1e21; color: #fff; border: none; border-radius: 6px; cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   }
 
-  button:hover { background: #3a3d42; }
+  button:hover { background: #3a3d42; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(28,30,33,0.18); }
+  button:active { transform: scale(0.96); box-shadow: none; }
   button.secondary { background: #fff; color: #1c1e21; border: 1px solid #d1d5db; }
   button.secondary:hover { background: #f4f5f7; }
   button.small { padding: 6px 12px; font-size: 13px; }
@@ -48,14 +88,24 @@
   #app { display: none; max-width: 1200px; margin: 0 auto; padding: 0 20px 60px; }
 
   .topbar { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; }
-  .topbar h1 { font-size: 20px; }
+
+  .topbar h1 {
+    font-size: 20px;
+    background: linear-gradient(90deg, #1c1e21 30%, #4f46e5 70%, #059669 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
 
   .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 
   .tab {
     padding: 8px 16px; border-radius: 6px; background: #fff;
     border: 1px solid #d1d5db; color: #1c1e21; cursor: pointer; font-size: 14px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   }
+
+  .tab:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(28,30,33,0.1); }
 
   .tab.active { background: #1c1e21; color: #fff; border-color: #1c1e21; }
 
@@ -66,7 +116,12 @@
 
   .stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 
-  .stat { background: #fff; border: 1px solid #e0e2e6; border-radius: 8px; padding: 12px 18px; min-width: 100px; }
+  .stat {
+    background: #fff; border: 1px solid #e0e2e6; border-radius: 8px; padding: 12px 18px; min-width: 100px;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .stat:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(28,30,33,0.1); }
   .stat .num { font-size: 22px; font-weight: 600; }
   .stat .lbl { font-size: 12px; color: #6b7280; }
 
@@ -85,7 +140,9 @@
   }
 
   tbody tr { border-bottom: 1px solid #f0f1f3; cursor: pointer; }
+  tbody tr td { transition: background 0.15s ease; }
   tbody tr:hover { background: #f9fafb; }
+  tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 #1c1e21; }
   tbody tr:last-child { border-bottom: none; }
 
   .pill { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -151,9 +208,25 @@
   .k-card {
     background: #fff; border: 1px solid #e0e2e6; border-radius: 8px;
     padding: 10px 12px; margin-bottom: 8px; cursor: pointer; font-size: 13px;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    animation: popIn 0.35s ease both;
   }
 
-  .k-card:hover { border-color: #9ca3af; }
+  .k-card:hover {
+    border-color: #9ca3af;
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 22px rgba(28,30,33,0.13);
+  }
+
+  /* pipeline columns slide in one after another */
+  .col { animation: rise 0.45s ease both; }
+  .col:nth-child(2) { animation-delay: 0.05s; }
+  .col:nth-child(3) { animation-delay: 0.1s; }
+  .col:nth-child(4) { animation-delay: 0.15s; }
+  .col:nth-child(5) { animation-delay: 0.2s; }
+  .col:nth-child(6) { animation-delay: 0.25s; }
+  .col:nth-child(7) { animation-delay: 0.3s; }
+  .col:nth-child(8) { animation-delay: 0.35s; }
   .k-card .k-name { font-weight: 600; font-size: 14px; }
   .k-card .k-co { color: #6b7280; }
   .k-card .k-next { color: #1e40af; font-size: 12px; margin-top: 4px; }
@@ -172,6 +245,7 @@
   .modal {
     background: #fff; border-radius: 10px; padding: 28px;
     width: 92%; max-width: 460px; max-height: 90vh; overflow-y: auto;
+    animation: popIn 0.3s ease;
   }
 
   .modal h2 { font-size: 18px; margin-bottom: 16px; }
@@ -187,6 +261,38 @@
     background: #1c1e21; color: #fff; padding: 10px 20px; border-radius: 8px;
     font-size: 14px; display: none; z-index: 100;
   }
+
+  /* ===== GAMIFICATION ===== */
+  .game {
+    background: #fff; border: 1px solid #e0e2e6; border-radius: 10px;
+    padding: 14px 18px; margin-bottom: 16px;
+    display: flex; gap: 28px; align-items: center; flex-wrap: wrap;
+  }
+
+  .game .lvl { font-weight: 600; font-size: 15px; }
+  .game .lvl .pts { color: #6b7280; font-size: 12px; font-weight: 400; display: block; margin-bottom: 4px; }
+
+  .gbar { width: 150px; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .gbar > div { height: 100%; background: #059669; border-radius: 4px; transition: width 0.5s ease; }
+
+  .gsec { font-size: 12px; color: #6b7280; }
+  .gsec .big { font-size: 20px; font-weight: 600; color: #1c1e21; display: block; }
+
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .bdg {
+    font-size: 12px; padding: 4px 10px; border-radius: 14px;
+    background: #f4f5f7; color: #9ca3af; border: 1px solid #e0e2e6;
+  }
+
+  .bdg.on { background: #fef3c7; color: #92400e; border-color: #fcd34d; font-weight: 600; }
+
+  .confetti-piece {
+    position: fixed; top: -14px; width: 10px; height: 14px;
+    z-index: 200; animation: cfall linear forwards; pointer-events: none;
+  }
+
+  @keyframes cfall { to { transform: translateY(110vh) rotate(720deg); } }
 </style>
 </head>
 <body>
@@ -218,6 +324,7 @@
   </div>
 
   <div id="view-pipeline">
+    <div class="game" id="game-bar"></div>
     <div class="board" id="board"></div>
     <div class="activity">
       <h3 class="section">Recent conversation updates</h3>
@@ -413,6 +520,20 @@ let currentLead = null;
 let selectedLogType = null;
 let csvRows = [];
 let currentView = 'pipeline';
+let allInteractions = [];
+
+// ===================== GAME RULES (tune freely!) =====================
+const POINTS = { call: 5, email: 3, linkedin: 3, whatsapp: 3, meeting: 10, note: 1 };
+const WIN_POINTS = 50;      // bonus per closed-won deal
+const DAILY_GOAL = 10;      // activities per day to fill the bar
+const LEVELS = [
+  { at: 0,    name: 'Rookie' },
+  { at: 100,  name: 'Hustler' },
+  { at: 300,  name: 'Dealmaker' },
+  { at: 700,  name: 'Closer' },
+  { at: 1500, name: 'Rainmaker' },
+  { at: 3000, name: 'Legend' }
+];
 
 const $ = (id) => document.getElementById(id);
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -458,6 +579,7 @@ async function showApp() {
   await loadLeads();
   renderBoard();
   loadActivity();
+  loadGameData();
 }
 
 // ===================== DATA =====================
@@ -604,7 +726,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     $('view-pipeline').style.display = v === 'pipeline' ? 'block' : 'none';
     $('view-leads').style.display = (v === 'leads' || v === 'due') ? 'block' : 'none';
     $('view-import').style.display = v === 'import' ? 'block' : 'none';
-    if (v === 'pipeline') { renderBoard(); loadActivity(); }
+    if (v === 'pipeline') { renderBoard(); loadActivity(); loadGameData(); }
     if (v === 'leads' || v === 'due') renderTable();
   });
 });
@@ -671,14 +793,31 @@ $('back-btn').addEventListener('click', () => {
 });
 
 $('d-status').addEventListener('change', async () => {
+  const newStatus = $('d-status').value;
   const { error } = await db.from('leads')
-    .update({ status: $('d-status').value })
+    .update({ status: newStatus })
     .eq('id', currentLead.id);
   if (error) { toast(error.message); return; }
-  currentLead.status = $('d-status').value;
+  currentLead.status = newStatus;
+
+  // auto-log the stage move: shows in history AND earns points
+  await db.from('interactions').insert({
+    lead_id: currentLead.id,
+    type: 'note',
+    notes: 'Stage moved to ' + stageLabel(newStatus)
+  });
+
   renderStats();
   renderSuggestion();
-  toast('Moved to ' + stageLabel(currentLead.status));
+  await loadTimeline();
+  loadGameData();
+
+  if (newStatus === 'won') {
+    confetti();
+    toast('DEAL WON! +' + WIN_POINTS + ' points');
+  } else {
+    toast('Moved to ' + stageLabel(newStatus));
+  }
 });
 
 $('d-followup').addEventListener('change', async () => {
@@ -738,8 +877,98 @@ $('log-save').addEventListener('click', async () => {
   renderStats();
   renderSuggestion();
   await loadTimeline();
-  toast('Update logged');
+  loadGameData();
+  toast('Update logged +' + (POINTS[selectedLogType] || 1) + ' pts');
 });
+
+// ===================== GAMIFICATION =====================
+async function loadGameData() {
+  const { data, error } = await db.from('interactions')
+    .select('type, created_at')
+    .order('created_at', { ascending: false })
+    .limit(2000);
+  if (error) return;
+  allInteractions = data;
+  renderGame();
+}
+
+function computeGame() {
+  const wonCount = leads.filter(l => l.status === 'won').length;
+
+  let points = wonCount * WIN_POINTS;
+  allInteractions.forEach(i => { points += POINTS[i.type] || 1; });
+
+  let level = LEVELS[0], next = null;
+  LEVELS.forEach((lv, ix) => {
+    if (points >= lv.at) { level = lv; next = LEVELS[ix + 1] || null; }
+  });
+
+  const t = todayStr();
+  const todayCount = allInteractions.filter(i => i.created_at.slice(0, 10) === t).length;
+
+  // Streak: consecutive days with at least one logged activity.
+  // Weekends without activity don't break it.
+  const days = new Set(allInteractions.map(i => i.created_at.slice(0, 10)));
+  let streak = 0;
+  const d = new Date();
+  if (!days.has(t)) d.setDate(d.getDate() - 1);   // haven't logged today yet? count back from yesterday
+  for (let guard = 0; guard < 365; guard++) {
+    const iso = d.toISOString().slice(0, 10);
+    const dow = d.getDay();
+    if (days.has(iso)) { streak++; d.setDate(d.getDate() - 1); }
+    else if (dow === 0 || dow === 6) { d.setDate(d.getDate() - 1); }
+    else break;
+  }
+
+  const meetings = allInteractions.filter(i => i.type === 'meeting').length;
+  const overdueCount = dueLeads().filter(l => l.next_followup < t).length;
+
+  const badges = [
+    { name: 'First win',        on: wonCount >= 1 },
+    { name: '5-day streak',     on: streak >= 5 },
+    { name: '100 updates',      on: allInteractions.length >= 100 },
+    { name: '10 meetings',      on: meetings >= 10 },
+    { name: 'Nothing overdue',  on: overdueCount === 0 && leads.length > 0 }
+  ];
+
+  return { points, level, next, todayCount, streak, badges, wonCount };
+}
+
+function renderGame() {
+  const g = computeGame();
+  const lvlPct = g.next
+    ? Math.min(100, Math.round(((g.points - g.level.at) / (g.next.at - g.level.at)) * 100))
+    : 100;
+  const dayPct = Math.min(100, Math.round((g.todayCount / DAILY_GOAL) * 100));
+
+  $('game-bar').innerHTML =
+    '<div class="lvl">' + g.level.name + ' · ' + g.points + ' pts' +
+      '<span class="pts">' + (g.next ? (g.next.at - g.points) + ' pts to ' + g.next.name : 'Max level!') + '</span>' +
+      '<div class="gbar"><div style="width:' + lvlPct + '%"></div></div>' +
+    '</div>' +
+    '<div class="gsec"><span class="big">' + g.todayCount + ' / ' + DAILY_GOAL + '</span>today\'s activities' +
+      '<div class="gbar"><div style="width:' + dayPct + '%; background:' + (dayPct >= 100 ? '#059669' : '#f59e0b') + '"></div></div>' +
+    '</div>' +
+    '<div class="gsec"><span class="big">' + (g.streak > 0 ? '🔥 ' + g.streak : '—') + '</span>day streak</div>' +
+    '<div class="gsec"><span class="big">' + g.wonCount + '</span>deals won</div>' +
+    '<div class="badges">' +
+      g.badges.map(b => '<span class="bdg' + (b.on ? ' on' : '') + '">' + b.name + '</span>').join('') +
+    '</div>';
+}
+
+function confetti() {
+  const colors = ['#f59e0b', '#059669', '#3b82f6', '#e11d48', '#8b5cf6'];
+  for (let i = 0; i < 90; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti-piece';
+    p.style.left = Math.random() * 100 + 'vw';
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.animationDuration = (1.8 + Math.random() * 1.6) + 's';
+    p.style.animationDelay = (Math.random() * 0.4) + 's';
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 4200);
+  }
+}
 
 // ===================== ADD LEAD =====================
 $('add-lead-btn').addEventListener('click', () => $('add-overlay').classList.add('open'));
