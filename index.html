@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leads — Malavika's CRM</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: #f4f5f7;
+    color: #1c1e21;
+    line-height: 1.5;
+    font-size: 15px;
+  }
+
+  #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+  .login-box {
+    background: #fff; padding: 40px; width: 90%; max-width: 380px;
+    border: 1px solid #e0e2e6; border-radius: 10px;
+  }
+
+  .login-box h1 { font-size: 22px; margin-bottom: 4px; }
+  .login-box .sub { color: #6b7280; font-size: 14px; margin-bottom: 24px; }
+
+  input, select, textarea {
+    width: 100%; padding: 10px 12px; margin-bottom: 12px;
+    border: 1px solid #d1d5db; border-radius: 6px;
+    font-family: inherit; font-size: 14px; background: #fff;
+  }
+
+  textarea { resize: vertical; min-height: 60px; }
+
+  button {
+    font-family: inherit; font-size: 14px; padding: 10px 18px;
+    background: #1c1e21; color: #fff; border: none; border-radius: 6px; cursor: pointer;
+  }
+
+  button:hover { background: #3a3d42; }
+  button.secondary { background: #fff; color: #1c1e21; border: 1px solid #d1d5db; }
+  button.secondary:hover { background: #f4f5f7; }
+  button.small { padding: 6px 12px; font-size: 13px; }
+
+  .error-msg { color: #b91c1c; font-size: 13px; margin-bottom: 8px; min-height: 18px; }
+
+  #app { display: none; max-width: 1200px; margin: 0 auto; padding: 0 20px 60px; }
+
+  .topbar { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; }
+  .topbar h1 { font-size: 20px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+
+  .tab {
+    padding: 8px 16px; border-radius: 6px; background: #fff;
+    border: 1px solid #d1d5db; color: #1c1e21; cursor: pointer; font-size: 14px;
+  }
+
+  .tab.active { background: #1c1e21; color: #fff; border-color: #1c1e21; }
+
+  .tab .badge {
+    background: #e11d48; color: #fff; border-radius: 10px;
+    padding: 1px 7px; font-size: 12px; margin-left: 6px;
+  }
+
+  .stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+
+  .stat { background: #fff; border: 1px solid #e0e2e6; border-radius: 8px; padding: 12px 18px; min-width: 100px; }
+  .stat .num { font-size: 22px; font-weight: 600; }
+  .stat .lbl { font-size: 12px; color: #6b7280; }
+
+  .controls { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .controls input, .controls select { width: auto; margin-bottom: 0; }
+  .controls input[type="search"] { flex: 1; min-width: 180px; }
+
+  .card { background: #fff; border: 1px solid #e0e2e6; border-radius: 10px; overflow: hidden; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 10px 14px; text-align: left; font-size: 14px; }
+
+  th {
+    background: #f9fafb; color: #6b7280; font-weight: 600; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #e0e2e6;
+  }
+
+  tbody tr { border-bottom: 1px solid #f0f1f3; cursor: pointer; }
+  tbody tr:hover { background: #f9fafb; }
+  tbody tr:last-child { border-bottom: none; }
+
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+  .st-new         { background: #e5e7eb; color: #374151; }
+  .st-contacted   { background: #dbeafe; color: #1e40af; }
+  .st-replied     { background: #fef3c7; color: #92400e; }
+  .st-discovery   { background: #cffafe; color: #155e75; }
+  .st-proposal    { background: #ede9fe; color: #5b21b6; }
+  .st-negotiation { background: #ffedd5; color: #9a3412; }
+  .st-won         { background: #d1fae5; color: #065f46; }
+  .st-lost        { background: #fee2e2; color: #991b1b; }
+
+  .overdue { color: #b91c1c; font-weight: 600; }
+  .muted { color: #9ca3af; }
+
+  .detail-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px; border-bottom: 1px solid #f0f1f3; flex-wrap: wrap; gap: 12px; }
+  .detail-head h2 { font-size: 20px; margin-bottom: 2px; }
+  .detail-head .sub { color: #6b7280; font-size: 14px; }
+
+  .suggest-bar {
+    margin: 16px 20px 0;
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+    padding: 12px 16px; font-size: 14px; color: #1e40af;
+  }
+
+  .suggest-bar strong { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
+
+  .detail-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 0; }
+  @media (max-width: 800px) { .detail-grid { grid-template-columns: 1fr; } }
+
+  .detail-col { padding: 20px; }
+  .detail-col + .detail-col { border-left: 1px solid #f0f1f3; }
+
+  .field-row { margin-bottom: 10px; font-size: 14px; }
+  .field-row .k { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  h3.section { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 12px; }
+
+  .log-types { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+
+  .log-type {
+    padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 20px;
+    background: #fff; font-size: 13px; cursor: pointer; color: #1c1e21;
+  }
+
+  .log-type.selected { background: #1c1e21; color: #fff; border-color: #1c1e21; }
+
+  .timeline { margin-top: 18px; }
+  .t-item { padding: 10px 0; border-bottom: 1px solid #f0f1f3; font-size: 14px; }
+  .t-item .t-meta { font-size: 12px; color: #6b7280; }
+
+  .board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; align-items: flex-start; }
+
+  .col {
+    background: #ebedf0; border-radius: 10px; padding: 10px;
+    min-width: 210px; width: 210px; flex-shrink: 0;
+  }
+
+  .col h4 { font-size: 13px; margin: 2px 4px 10px; display: flex; justify-content: space-between; }
+  .col h4 .cnt { color: #6b7280; font-weight: 600; }
+
+  .k-card {
+    background: #fff; border: 1px solid #e0e2e6; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px; cursor: pointer; font-size: 13px;
+  }
+
+  .k-card:hover { border-color: #9ca3af; }
+  .k-card .k-name { font-weight: 600; font-size: 14px; }
+  .k-card .k-co { color: #6b7280; }
+  .k-card .k-next { color: #1e40af; font-size: 12px; margin-top: 4px; }
+  .k-card .k-over { color: #b91c1c; font-size: 12px; margin-top: 4px; font-weight: 600; }
+
+  .activity { margin-top: 20px; }
+  .activity .card { padding: 6px 20px; }
+
+  .overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    z-index: 50; justify-content: center; align-items: center;
+  }
+
+  .overlay.open { display: flex; }
+
+  .modal {
+    background: #fff; border-radius: 10px; padding: 28px;
+    width: 92%; max-width: 460px; max-height: 90vh; overflow-y: auto;
+  }
+
+  .modal h2 { font-size: 18px; margin-bottom: 16px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+
+  .import-box { padding: 24px; }
+  .import-box p { margin-bottom: 12px; font-size: 14px; color: #374151; }
+  .import-box code { background: #f4f5f7; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  #import-preview { margin-top: 14px; font-size: 14px; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1c1e21; color: #fff; padding: 10px 20px; border-radius: 8px;
+    font-size: 14px; display: none; z-index: 100;
+  }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-box">
+    <h1>Malavika's CRM</h1>
+    <p class="sub">Private — sign in to continue</p>
+    <div class="error-msg" id="login-error"></div>
+    <input type="email" id="login-email" placeholder="Email">
+    <input type="password" id="login-password" placeholder="Password">
+    <button id="login-btn" style="width:100%">Sign in</button>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <h1>Malavika's CRM</h1>
+    <button class="secondary small" id="logout-btn">Log out</button>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="pipeline">Pipeline board</button>
+    <button class="tab" data-view="leads">All leads</button>
+    <button class="tab" data-view="due">Follow-ups due <span class="badge" id="due-badge" style="display:none">0</span></button>
+    <button class="tab" data-view="import">Import CSV</button>
+  </div>
+
+  <div id="view-pipeline">
+    <div class="board" id="board"></div>
+    <div class="activity">
+      <h3 class="section">Recent conversation updates</h3>
+      <div class="card" id="activity-feed"></div>
+    </div>
+  </div>
+
+  <div id="view-leads" style="display:none">
+    <div class="controls">
+      <input type="search" id="search" placeholder="Search name, company, email...">
+      <select id="filter-status"><option value="">All stages</option></select>
+      <select id="filter-source">
+        <option value="">All sources</option>
+        <option>linkedin_post</option><option>linkedin</option><option>cold</option>
+        <option>referral</option><option>event</option><option>whatsapp</option><option>other</option>
+      </select>
+      <button id="add-lead-btn">+ Add lead</button>
+      <button class="secondary" id="export-btn">Export CSV</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Company</th><th>Stage</th><th>Next step</th><th>Last contact</th><th>Follow-up</th></tr>
+        </thead>
+        <tbody id="leads-tbody"></tbody>
+      </table>
+      <div id="empty-state" style="display:none; padding:40px; text-align:center; color:#6b7280;">
+        No leads yet — add one or import a CSV.
+      </div>
+    </div>
+  </div>
+
+  <div id="view-detail" style="display:none">
+    <div class="controls">
+      <button class="secondary" id="back-btn">← Back</button>
+      <button class="secondary" id="delete-lead-btn" style="color:#b91c1c">Delete lead</button>
+    </div>
+    <div class="card">
+      <div class="detail-head">
+        <div>
+          <h2 id="d-name"></h2>
+          <div class="sub" id="d-sub"></div>
+        </div>
+        <div>
+          <select id="d-status" style="margin-bottom:0; width:auto"></select>
+        </div>
+      </div>
+      <div class="suggest-bar" id="suggest-bar"></div>
+      <div class="detail-grid">
+        <div class="detail-col">
+          <h3 class="section">Details</h3>
+          <div class="field-row"><div class="k">Email</div><div id="d-email" class="v"></div></div>
+          <div class="field-row"><div class="k">Phone</div><div id="d-phone" class="v"></div></div>
+          <div class="field-row"><div class="k">LinkedIn</div><div id="d-linkedin" class="v"></div></div>
+          <div class="field-row"><div class="k">Source</div><div id="d-source" class="v"></div></div>
+          <div class="field-row"><div class="k">Notes</div><div id="d-notes" class="v"></div></div>
+          <h3 class="section" style="margin-top:20px">Your planned next step</h3>
+          <input type="text" id="d-nextstep" placeholder="e.g. Send proposal draft by Thursday">
+          <h3 class="section" style="margin-top:8px">Next follow-up date</h3>
+          <input type="date" id="d-followup" style="width:auto">
+        </div>
+        <div class="detail-col">
+          <h3 class="section">Log a conversation update</h3>
+          <div class="log-types" id="log-types">
+            <button class="log-type" data-type="call">Call</button>
+            <button class="log-type" data-type="email">Email</button>
+            <button class="log-type" data-type="linkedin">LinkedIn</button>
+            <button class="log-type" data-type="whatsapp">WhatsApp</button>
+            <button class="log-type" data-type="meeting">Meeting</button>
+            <button class="log-type" data-type="note">Note</button>
+          </div>
+          <textarea id="log-notes" placeholder="What happened? e.g. 'Discovery call done — needs GPU pricing, CFO joins next call'"></textarea>
+          <button id="log-save">Save update</button>
+          <div class="timeline" id="timeline"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-import" style="display:none">
+    <div class="card import-box">
+      <p><strong>Import leads from CSV</strong> (exported from Excel: File → Save As → CSV)</p>
+      <p>First row must be headers. Recognized columns: <code>name</code> (required), <code>company</code>, <code>title</code>, <code>email</code>, <code>phone</code>, <code>linkedin_url</code>, <code>source</code>, <code>notes</code>. Extra columns are ignored.</p>
+      <input type="file" id="csv-file" accept=".csv,text/csv">
+      <div id="import-preview"></div>
+      <button id="import-btn" style="display:none">Import these leads</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="add-overlay">
+  <div class="modal">
+    <h2>Add lead</h2>
+    <input type="text" id="n-name" placeholder="Name *">
+    <div class="two-col">
+      <input type="text" id="n-company" placeholder="Company">
+      <input type="text" id="n-title" placeholder="Job title">
+    </div>
+    <div class="two-col">
+      <input type="email" id="n-email" placeholder="Email">
+      <input type="text" id="n-phone" placeholder="Phone (+91...)">
+    </div>
+    <input type="text" id="n-linkedin" placeholder="LinkedIn URL">
+    <select id="n-source">
+      <option value="other">Source: other</option>
+      <option value="linkedin_post">From a LinkedIn post</option>
+      <option value="linkedin">LinkedIn outreach</option>
+      <option value="cold">Cold list</option>
+      <option value="referral">Referral</option>
+      <option value="event">Event</option>
+      <option value="whatsapp">WhatsApp</option>
+    </select>
+    <textarea id="n-notes" placeholder="Notes"></textarea>
+    <div style="display:flex; gap:10px; justify-content:flex-end">
+      <button class="secondary" id="add-cancel">Cancel</button>
+      <button id="add-save">Save lead</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ===================== CONNECTION =====================
+const SUPABASE_URL = 'https://dqktnenzfrwakovomgzt.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxa3RuZW56ZnJ3YWtvdm9tZ3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MDg2NDMsImV4cCI6MjA5OTQ4NDY0M30.5_hT9RHCiqslWDPmYJzhOJRCSzuNXtBbb2pZeQzPlyI';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ===================== SALES STAGES =====================
+// value = stored in the database; label = what you see.
+// The order here IS the pipeline order on the board.
+const STAGES = [
+  { value: 'new',         label: 'Prospect' },
+  { value: 'contacted',   label: 'Contacted' },
+  { value: 'replied',     label: 'Replied' },
+  { value: 'discovery',   label: 'Discovery call set' },
+  { value: 'proposal',    label: 'Proposal submitted' },
+  { value: 'negotiation', label: 'Negotiation' },
+  { value: 'won',         label: 'Closed won' },
+  { value: 'lost',        label: 'Closed lost' }
+];
+
+const stageLabel = (v) => (STAGES.find(s => s.value === v) || { label: v }).label;
+
+function fillStageSelects() {
+  const opts = STAGES.map(s => '<option value="' + s.value + '">' + s.label + '</option>').join('');
+  document.getElementById('d-status').innerHTML = opts;
+  document.getElementById('filter-status').innerHTML = '<option value="">All stages</option>' + opts;
+}
+
+// ===================== NEXT-STEP SUGGESTIONS =====================
+// Simple rules reading the lead's stage + timing. Your manually
+// typed "planned next step" always takes priority in lists.
+function suggestNextStep(l) {
+  const t = todayStr();
+  const daysSince = l.last_contacted
+    ? Math.floor((Date.now() - new Date(l.last_contacted).getTime()) / 86400000)
+    : null;
+
+  if (l.next_followup && l.next_followup < t && l.status !== 'won' && l.status !== 'lost')
+    return 'Follow-up is OVERDUE (' + l.next_followup + ') — reach out today.';
+
+  switch (l.status) {
+    case 'new':
+      return 'Make the first touch — intro email (automated) or a warm-up call.';
+    case 'contacted':
+      if (daysSince !== null && daysSince >= 5)
+        return daysSince + ' days silent — try a different channel: call or LinkedIn.';
+      return 'Intro sent — follow-up flow will nudge; consider a LinkedIn touch meanwhile.';
+    case 'replied':
+      return 'They replied! Book the discovery call while interest is warm.';
+    case 'discovery':
+      return 'Hold the discovery call → send a recap same day → move to proposal.';
+    case 'proposal':
+      if (daysSince !== null && daysSince >= 5)
+        return 'Proposal is ' + daysSince + ' days old with no touch — chase for feedback.';
+      return 'Proposal in their hands — set a follow-up date to chase feedback.';
+    case 'negotiation':
+      return 'Keep momentum — schedule the closing call, involve decision-makers.';
+    case 'won':
+      return 'Closed! Ask for a referral and log the handover.';
+    case 'lost':
+      return 'Log why it was lost — set a follow-up ~90 days out to revisit.';
+    default:
+      return 'Log where things stand, set a next step.';
+  }
+}
+
+// ===================== STATE =====================
+let leads = [];
+let currentLead = null;
+let selectedLogType = null;
+let csvRows = [];
+let currentView = 'pipeline';
+
+const $ = (id) => document.getElementById(id);
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 2200);
+}
+
+function esc(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ===================== AUTH =====================
+async function init() {
+  fillStageSelects();
+  const { data: { session } } = await db.auth.getSession();
+  if (session) showApp();
+}
+
+$('login-btn').addEventListener('click', async () => {
+  $('login-error').textContent = '';
+  const { error } = await db.auth.signInWithPassword({
+    email: $('login-email').value.trim(),
+    password: $('login-password').value
+  });
+  if (error) { $('login-error').textContent = 'Sign-in failed: ' + error.message; return; }
+  showApp();
+});
+
+$('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('login-btn').click(); });
+
+$('logout-btn').addEventListener('click', async () => {
+  await db.auth.signOut();
+  location.reload();
+});
+
+async function showApp() {
+  $('login-screen').style.display = 'none';
+  $('app').style.display = 'block';
+  await loadLeads();
+  renderBoard();
+  loadActivity();
+}
+
+// ===================== DATA =====================
+async function loadLeads() {
+  const { data, error } = await db.from('leads')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) { toast('Load error: ' + error.message); return; }
+  leads = data;
+  renderStats();
+  renderTable();
+}
+
+function dueLeads() {
+  const t = todayStr();
+  return leads.filter(l => l.next_followup && l.next_followup <= t
+    && l.status !== 'won' && l.status !== 'lost');
+}
+
+// ===================== STATS =====================
+function renderStats() {
+  const by = {};
+  leads.forEach(l => { by[l.status] = (by[l.status] || 0) + 1; });
+  const due = dueLeads().length;
+  const active = leads.length - (by.won || 0) - (by.lost || 0);
+  $('stats').innerHTML =
+    stat(leads.length, 'total') +
+    stat(active, 'active') +
+    stat(by.discovery || 0, 'discovery') +
+    stat(by.proposal || 0, 'proposal') +
+    stat(by.negotiation || 0, 'negotiation') +
+    stat(by.won || 0, 'won') +
+    stat(due, 'due today', due > 0);
+  const badge = $('due-badge');
+  badge.style.display = due > 0 ? 'inline' : 'none';
+  badge.textContent = due;
+}
+
+function stat(n, label, alert) {
+  return '<div class="stat"><div class="num"' + (alert ? ' style="color:#e11d48"' : '') + '>' + n +
+    '</div><div class="lbl">' + label + '</div></div>';
+}
+
+// ===================== PIPELINE BOARD =====================
+function renderBoard() {
+  const t = todayStr();
+  $('board').innerHTML = STAGES.map(s => {
+    const items = leads.filter(l => l.status === s.value);
+    const cards = items.map(l => {
+      const overdue = l.next_followup && l.next_followup < t && s.value !== 'won' && s.value !== 'lost';
+      return '<div class="k-card" data-id="' + l.id + '">' +
+        '<div class="k-name">' + esc(l.name) + '</div>' +
+        '<div class="k-co">' + esc(l.company || '—') + '</div>' +
+        (overdue
+          ? '<div class="k-over">Overdue: ' + l.next_followup + '</div>'
+          : (l.next_step ? '<div class="k-next">→ ' + esc(l.next_step) + '</div>' : '')) +
+      '</div>';
+    }).join('');
+    return '<div class="col"><h4>' + s.label + ' <span class="cnt">' + items.length + '</span></h4>' +
+      (cards || '<div class="muted" style="font-size:12px; padding:4px">empty</div>') + '</div>';
+  }).join('');
+}
+
+$('board').addEventListener('click', (e) => {
+  const card = e.target.closest('.k-card');
+  if (card) openDetail(Number(card.dataset.id));
+});
+
+// ===================== ACTIVITY FEED =====================
+async function loadActivity() {
+  const { data, error } = await db.from('interactions')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(15);
+  if (error) { $('activity-feed').innerHTML = '<div class="t-item">' + esc(error.message) + '</div>'; return; }
+  if (!data.length) {
+    $('activity-feed').innerHTML = '<div class="t-item muted">No conversation updates yet.</div>';
+    return;
+  }
+  $('activity-feed').innerHTML = data.map(i => {
+    const lead = leads.find(l => l.id === i.lead_id);
+    const who = lead ? esc(lead.name) + (lead.company ? ' (' + esc(lead.company) + ')' : '') : 'deleted lead';
+    return '<div class="t-item" ' + (lead ? 'style="cursor:pointer" data-id="' + lead.id + '"' : '') + '>' +
+      '<span class="pill st-contacted">' + i.type + '</span> <strong>' + who + '</strong> — ' + esc(i.notes || '') +
+      '<div class="t-meta">' + new Date(i.created_at).toLocaleString() + '</div></div>';
+  }).join('');
+}
+
+$('activity-feed').addEventListener('click', (e) => {
+  const item = e.target.closest('.t-item');
+  if (item && item.dataset.id) openDetail(Number(item.dataset.id));
+});
+
+// ===================== LEADS TABLE =====================
+function renderTable() {
+  const q = $('search').value.toLowerCase();
+  const fs = $('filter-status').value;
+  const fsrc = $('filter-source').value;
+
+  let rows = currentView === 'due' ? dueLeads() : leads;
+  rows = rows.filter(l =>
+    (!q || (l.name + ' ' + (l.company || '') + ' ' + (l.email || '')).toLowerCase().includes(q)) &&
+    (!fs || l.status === fs) &&
+    (!fsrc || l.source === fsrc)
+  );
+
+  if (currentView === 'due') {
+    rows = rows.slice().sort((a, b) => (a.next_followup || '').localeCompare(b.next_followup || ''));
+  }
+
+  const t = todayStr();
+  $('leads-tbody').innerHTML = rows.map(l => {
+    const overdue = l.next_followup && l.next_followup < t && l.status !== 'won' && l.status !== 'lost';
+    return '<tr data-id="' + l.id + '">' +
+      '<td><strong>' + esc(l.name) + '</strong>' +
+        (l.title ? '<div class="muted" style="font-size:12px">' + esc(l.title) + '</div>' : '') + '</td>' +
+      '<td>' + esc(l.company) + '</td>' +
+      '<td><span class="pill st-' + l.status + '">' + stageLabel(l.status) + '</span></td>' +
+      '<td class="muted" style="max-width:220px">' + esc((l.next_step || suggestNextStep(l))).slice(0, 60) + '</td>' +
+      '<td class="muted">' + (l.last_contacted ? l.last_contacted.slice(0, 10) : '—') + '</td>' +
+      '<td class="' + (overdue ? 'overdue' : 'muted') + '">' + (l.next_followup || '—') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  $('empty-state').style.display = rows.length ? 'none' : 'block';
+}
+
+['search', 'filter-status', 'filter-source'].forEach(id =>
+  $(id).addEventListener('input', renderTable));
+
+$('leads-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr');
+  if (tr) openDetail(Number(tr.dataset.id));
+});
+
+// ===================== TABS =====================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    tab.classList.add('active');
+    const v = tab.dataset.view;
+    currentView = v;
+    $('view-detail').style.display = 'none';
+    $('view-pipeline').style.display = v === 'pipeline' ? 'block' : 'none';
+    $('view-leads').style.display = (v === 'leads' || v === 'due') ? 'block' : 'none';
+    $('view-import').style.display = v === 'import' ? 'block' : 'none';
+    if (v === 'pipeline') { renderBoard(); loadActivity(); }
+    if (v === 'leads' || v === 'due') renderTable();
+  });
+});
+
+// ===================== DETAIL =====================
+async function openDetail(id) {
+  currentLead = leads.find(l => l.id === id);
+  if (!currentLead) return;
+
+  $('view-pipeline').style.display = 'none';
+  $('view-leads').style.display = 'none';
+  $('view-import').style.display = 'none';
+  $('view-detail').style.display = 'block';
+
+  $('d-name').textContent = currentLead.name;
+  $('d-sub').textContent = [currentLead.title, currentLead.company].filter(Boolean).join(' · ');
+  $('d-email').innerHTML = currentLead.email
+    ? '<a href="mailto:' + esc(currentLead.email) + '">' + esc(currentLead.email) + '</a>' : '—';
+
+  const digits = (currentLead.phone || '').replace(/[^0-9]/g, '');
+  $('d-phone').innerHTML = currentLead.phone
+    ? '<a href="tel:' + digits + '">' + esc(currentLead.phone) + '</a>' +
+      (digits.length >= 11
+        ? ' &nbsp;·&nbsp; <a href="https://wa.me/' + digits + '" target="_blank">WhatsApp ↗</a>'
+        : ' <span class="muted">(add country code for WhatsApp link)</span>')
+    : '—';
+
+  $('d-linkedin').innerHTML = currentLead.linkedin_url
+    ? '<a href="' + esc(currentLead.linkedin_url) + '" target="_blank">profile ↗</a>' : '—';
+  $('d-source').textContent = currentLead.source || '—';
+  $('d-notes').textContent = currentLead.notes || '—';
+  $('d-status').value = currentLead.status;
+  $('d-followup').value = currentLead.next_followup || '';
+  $('d-nextstep').value = currentLead.next_step || '';
+  $('log-notes').value = '';
+  selectedLogType = null;
+  document.querySelectorAll('.log-type').forEach(b => b.classList.remove('selected'));
+
+  renderSuggestion();
+  await loadTimeline();
+}
+
+function renderSuggestion() {
+  $('suggest-bar').innerHTML = '<strong>Suggested next step</strong>' + esc(suggestNextStep(currentLead));
+}
+
+async function loadTimeline() {
+  const { data, error } = await db.from('interactions')
+    .select('*')
+    .eq('lead_id', currentLead.id)
+    .order('created_at', { ascending: false });
+  if (error) { toast(error.message); return; }
+  $('timeline').innerHTML = data.length
+    ? data.map(i =>
+        '<div class="t-item"><span class="pill st-contacted">' + i.type + '</span> ' + esc(i.notes) +
+        '<div class="t-meta">' + new Date(i.created_at).toLocaleString() + '</div></div>').join('')
+    : '<div class="muted" style="padding:10px 0">No conversation updates yet.</div>';
+}
+
+$('back-btn').addEventListener('click', () => {
+  $('view-detail').style.display = 'none';
+  if (currentView === 'pipeline') { $('view-pipeline').style.display = 'block'; renderBoard(); loadActivity(); }
+  else { $('view-leads').style.display = 'block'; renderTable(); }
+});
+
+$('d-status').addEventListener('change', async () => {
+  const { error } = await db.from('leads')
+    .update({ status: $('d-status').value })
+    .eq('id', currentLead.id);
+  if (error) { toast(error.message); return; }
+  currentLead.status = $('d-status').value;
+  renderStats();
+  renderSuggestion();
+  toast('Moved to ' + stageLabel(currentLead.status));
+});
+
+$('d-followup').addEventListener('change', async () => {
+  const v = $('d-followup').value || null;
+  const { error } = await db.from('leads').update({ next_followup: v }).eq('id', currentLead.id);
+  if (error) { toast(error.message); return; }
+  currentLead.next_followup = v;
+  renderStats();
+  renderSuggestion();
+  toast('Follow-up set');
+});
+
+$('d-nextstep').addEventListener('change', async () => {
+  const v = $('d-nextstep').value.trim() || null;
+  const { error } = await db.from('leads').update({ next_step: v }).eq('id', currentLead.id);
+  if (error) { toast(error.message); return; }
+  currentLead.next_step = v;
+  toast('Next step saved');
+});
+
+$('delete-lead-btn').addEventListener('click', async () => {
+  if (!confirm('Delete ' + currentLead.name + ' and all their history?')) return;
+  const { error } = await db.from('leads').delete().eq('id', currentLead.id);
+  if (error) { toast(error.message); return; }
+  leads = leads.filter(l => l.id !== currentLead.id);
+  $('back-btn').click();
+  renderStats();
+  toast('Lead deleted');
+});
+
+document.querySelectorAll('.log-type').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.log-type').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedLogType = btn.dataset.type;
+  });
+});
+
+$('log-save').addEventListener('click', async () => {
+  if (!selectedLogType) { toast('Pick a type: call, email...'); return; }
+  const notes = $('log-notes').value.trim();
+
+  const { error } = await db.from('interactions').insert({
+    lead_id: currentLead.id,
+    type: selectedLogType,
+    notes: notes
+  });
+  if (error) { toast(error.message); return; }
+
+  const updates = { last_contacted: new Date().toISOString() };
+  if (currentLead.status === 'new' && selectedLogType !== 'note') updates.status = 'contacted';
+  await db.from('leads').update(updates).eq('id', currentLead.id);
+  Object.assign(currentLead, updates);
+
+  $('log-notes').value = '';
+  $('d-status').value = currentLead.status;
+  renderStats();
+  renderSuggestion();
+  await loadTimeline();
+  toast('Update logged');
+});
+
+// ===================== ADD LEAD =====================
+$('add-lead-btn').addEventListener('click', () => $('add-overlay').classList.add('open'));
+$('add-cancel').addEventListener('click', () => $('add-overlay').classList.remove('open'));
+
+$('add-save').addEventListener('click', async () => {
+  const name = $('n-name').value.trim();
+  if (!name) { toast('Name is required'); return; }
+
+  const lead = {
+    name: name,
+    company: $('n-company').value.trim() || null,
+    title: $('n-title').value.trim() || null,
+    email: $('n-email').value.trim().toLowerCase() || null,
+    phone: $('n-phone').value.trim() || null,
+    linkedin_url: $('n-linkedin').value.trim() || null,
+    source: $('n-source').value,
+    notes: $('n-notes').value.trim() || null
+  };
+
+  const { data, error } = await db.from('leads').insert(lead).select().single();
+  if (error) { toast(error.message); return; }
+
+  leads.unshift(data);
+  ['n-name','n-company','n-title','n-email','n-phone','n-linkedin','n-notes'].forEach(id => $(id).value = '');
+  $('add-overlay').classList.remove('open');
+  renderStats();
+  renderTable();
+  renderBoard();
+  toast('Lead added');
+});
+
+// ===================== CSV IMPORT =====================
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') inQuotes = false;
+      else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(field); field = '';
+        if (row.some(f => f.trim() !== '')) rows.push(row);
+        row = [];
+      }
+      else field += c;
+    }
+  }
+  if (field !== '' || row.length) { row.push(field); if (row.some(f => f.trim() !== '')) rows.push(row); }
+  return rows;
+}
+
+$('csv-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const rows = parseCSV(text);
+  if (rows.length < 2) { $('import-preview').textContent = 'Could not find data rows.'; return; }
+
+  const known = ['name', 'company', 'title', 'email', 'phone', 'linkedin_url', 'source', 'notes'];
+  const headers = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+
+  csvRows = rows.slice(1).map(r => {
+    const obj = {};
+    headers.forEach((h, i) => { if (known.includes(h) && r[i] && r[i].trim()) obj[h] = r[i].trim(); });
+    if (obj.email) obj.email = obj.email.toLowerCase();
+    return obj;
+  }).filter(o => o.name);
+
+  const skipped = rows.length - 1 - csvRows.length;
+  $('import-preview').innerHTML =
+    '<strong>' + csvRows.length + '</strong> leads ready to import' +
+    (skipped > 0 ? ' (' + skipped + ' rows skipped — missing name)' : '') +
+    '.<br>Matched columns: ' + headers.filter(h => known.includes(h)).join(', ');
+  $('import-btn').style.display = csvRows.length ? 'inline-block' : 'none';
+});
+
+$('import-btn').addEventListener('click', async () => {
+  $('import-btn').disabled = true;
+  $('import-btn').textContent = 'Importing...';
+
+  let inserted = 0;
+  for (let i = 0; i < csvRows.length; i += 200) {
+    const chunk = csvRows.slice(i, i + 200);
+    const { error } = await db.from('leads').insert(chunk);
+    if (error) { toast('Stopped at row ' + i + ': ' + error.message); break; }
+    inserted += chunk.length;
+  }
+
+  $('import-btn').disabled = false;
+  $('import-btn').textContent = 'Import these leads';
+  $('import-preview').innerHTML += '<br><strong>Imported ' + inserted + ' leads ✓</strong>';
+  toast('Imported ' + inserted + ' leads');
+  await loadLeads();
+  renderBoard();
+});
+
+// ===================== CSV EXPORT =====================
+$('export-btn').addEventListener('click', () => {
+  const q = $('search').value.toLowerCase();
+  const fs = $('filter-status').value;
+  const fsrc = $('filter-source').value;
+  const rows = leads.filter(l =>
+    (!q || (l.name + ' ' + (l.company || '') + ' ' + (l.email || '')).toLowerCase().includes(q)) &&
+    (!fs || l.status === fs) &&
+    (!fsrc || l.source === fsrc)
+  );
+
+  const cols = ['name','company','title','email','phone','linkedin_url','source','status','next_step','next_followup','last_contacted','notes'];
+  const csvEsc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const csv = cols.join(',') + '\n' +
+    rows.map(l => cols.map(c => csvEsc(l[c])).join(',')).join('\n');
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'leads-export-' + todayStr() + '.csv';
+  a.click();
+  toast('Exported ' + rows.length + ' leads');
+});
+
+init();
+</script>
+
+</body>
+</html>
