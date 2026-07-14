@@ -329,6 +329,7 @@
     <button class="tab" data-view="leads">All leads</button>
     <button class="tab" data-view="due">Follow-ups due <span class="badge" id="due-badge" style="display:none">0</span></button>
     <button class="tab" data-view="customers">Customers</button>
+    <button class="tab" data-view="analytics">Analytics</button>
     <button class="tab" data-view="import">Import CSV</button>
     <button class="tab" data-view="templates">Templates</button>
   </div>
@@ -422,6 +423,7 @@
           </div>
           <textarea id="log-notes" placeholder="What happened? e.g. 'Discovery call done — needs GPU pricing, CFO joins next call'"></textarea>
           <button id="log-save">Save update</button>
+          <div id="d-lead-stats" class="muted" style="font-size:13px; margin-top:16px"></div>
           <div class="timeline" id="timeline"></div>
         </div>
       </div>
@@ -435,6 +437,19 @@
       <input type="file" id="csv-file" accept=".csv,text/csv">
       <div id="import-preview"></div>
       <button id="import-btn" style="display:none">Import these leads</button>
+    </div>
+  </div>
+
+  <!-- ANALYTICS VIEW -->
+  <div id="view-analytics" style="display:none">
+    <div class="stats" id="an-chips"></div>
+    <div class="card" style="padding:20px">
+      <h3 class="section">Daily outreach — last 14 days</h3>
+      <table id="an-table"></table>
+      <p class="muted" style="font-size:12px; margin-top:10px">
+        Counts come from your logged updates (notes and stage moves excluded).
+        The more faithfully you log, the truer this picture.
+      </p>
     </div>
   </div>
 
@@ -797,9 +812,11 @@ document.querySelectorAll('.tab').forEach(tab => {
     $('view-leads').style.display = (v === 'leads' || v === 'due' || v === 'customers') ? 'block' : 'none';
     $('view-import').style.display = v === 'import' ? 'block' : 'none';
     $('view-templates').style.display = v === 'templates' ? 'block' : 'none';
+    $('view-analytics').style.display = v === 'analytics' ? 'block' : 'none';
     if (v === 'pipeline') { renderBoard(); loadActivity(); loadGameData(); }
     if (v === 'leads' || v === 'due' || v === 'customers') renderTable();
     if (v === 'templates') renderTemplateList();
+    if (v === 'analytics') loadGameData().then(renderAnalytics);
   });
 });
 
@@ -812,6 +829,7 @@ async function openDetail(id) {
   $('view-leads').style.display = 'none';
   $('view-import').style.display = 'none';
   $('view-templates').style.display = 'none';
+  $('view-analytics').style.display = 'none';
   $('view-detail').style.display = 'block';
 
   $('d-name').textContent = currentLead.name;
@@ -895,6 +913,21 @@ async function loadTimeline() {
     .eq('lead_id', currentLead.id)
     .order('created_at', { ascending: false });
   if (error) { toast(error.message); return; }
+
+  // per-lead touch summary: how many of each, and when last contacted
+  const c = {};
+  data.forEach(i => { c[i.type] = (c[i.type] || 0) + 1; });
+  const lc = currentLead.last_contacted
+    ? new Date(currentLead.last_contacted).toLocaleDateString()
+    : 'never';
+  $('d-lead-stats').innerHTML =
+    '<strong>' + (c.call || 0) + '</strong> calls · ' +
+    '<strong>' + (c.email || 0) + '</strong> emails · ' +
+    '<strong>' + (c.whatsapp || 0) + '</strong> WhatsApp · ' +
+    '<strong>' + (c.linkedin || 0) + '</strong> LinkedIn · ' +
+    '<strong>' + (c.meeting || 0) + '</strong> meetings' +
+    ' &nbsp;|&nbsp; last contacted: <strong>' + lc + '</strong>';
+
   $('timeline').innerHTML = data.length
     ? data.map(i =>
         '<div class="t-item"><span class="pill st-contacted">' + i.type + '</span> ' + esc(i.notes) +
@@ -1228,6 +1261,66 @@ function renderGame() {
     '<div class="badges">' +
       g.badges.map(b => '<span class="bdg' + (b.on ? ' on' : '') + '">' + b.name + '</span>').join('') +
     '</div>';
+}
+
+// ===================== ANALYTICS =====================
+function renderAnalytics() {
+  const OUTREACH = ['call', 'email', 'whatsapp', 'linkedin', 'meeting'];
+  const t = todayStr();
+
+  // build the last 14 days, newest first
+  const days = [];
+  for (let i = 0; i < 14; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+
+  // count each type per day
+  const counts = {};
+  days.forEach(day => {
+    counts[day] = { total: 0 };
+    OUTREACH.forEach(x => { counts[day][x] = 0; });
+  });
+  allInteractions.forEach(i => {
+    const day = i.created_at.slice(0, 10);
+    if (counts[day] && OUTREACH.includes(i.type)) {
+      counts[day][i.type]++;
+      counts[day].total++;
+    }
+  });
+
+  const week = days.slice(0, 7).reduce((sum, d) => sum + counts[d].total, 0);
+  const today = counts[t];
+
+  $('an-chips').innerHTML =
+    stat(today.total, 'touches today') +
+    stat(today.call, 'calls today') +
+    stat(today.email, 'emails today') +
+    stat(today.whatsapp, 'whatsapp today') +
+    stat(today.linkedin, 'linkedin today') +
+    stat(week, 'this week');
+
+  // day-wise table with a mini bar per day
+  const maxTotal = Math.max(1, ...days.map(d => counts[d].total));
+  $('an-table').innerHTML =
+    '<thead><tr><th>Day</th><th>Calls</th><th>Emails</th><th>WhatsApp</th><th>LinkedIn</th><th>Meetings</th><th>Total</th><th style="width:30%"></th></tr></thead>' +
+    '<tbody>' + days.map(day => {
+      const c = counts[day];
+      const label = new Date(day + 'T00:00:00')
+        .toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+      const pct = Math.round((c.total / maxTotal) * 100);
+      return '<tr style="cursor:default">' +
+        '<td' + (day === t ? ' style="font-weight:600"' : '') + '>' + label + (day === t ? ' (today)' : '') + '</td>' +
+        '<td>' + (c.call || '') + '</td>' +
+        '<td>' + (c.email || '') + '</td>' +
+        '<td>' + (c.whatsapp || '') + '</td>' +
+        '<td>' + (c.linkedin || '') + '</td>' +
+        '<td>' + (c.meeting || '') + '</td>' +
+        '<td><strong>' + (c.total || '') + '</strong></td>' +
+        '<td><div style="background:#4f46e5; height:8px; border-radius:4px; width:' + pct + '%"></div></td>' +
+      '</tr>';
+    }).join('') + '</tbody>';
 }
 
 function confetti() {
