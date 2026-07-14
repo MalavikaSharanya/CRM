@@ -292,6 +292,14 @@
     z-index: 200; animation: cfall linear forwards; pointer-events: none;
   }
 
+  /* logger glow when a contact link arms it */
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: none; }
+    50% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.35); }
+  }
+
+  .armed { animation: pulseGlow 1s ease 3; border-color: #3b82f6; }
+
   @keyframes cfall { to { transform: translateY(110vh) rotate(720deg); } }
 </style>
 </head>
@@ -932,6 +940,44 @@ document.querySelectorAll('.log-type').forEach(btn => {
     btn.classList.add('selected');
     selectedLogType = btn.dataset.type;
   });
+});
+
+// ===================== ARM THE LOGGER ON CONTACT =====================
+// Clicking a contact link (call / WhatsApp / email / LinkedIn) pre-selects
+// the matching log type and spotlights the notes box — so logging the
+// touch is waiting for you the moment you're done.
+const ARM_PROMPTS = {
+  call:     'How did the call go? e.g. "Spoke briefly — send colo pricing, call back Friday"',
+  whatsapp: 'What did you send / discuss on WhatsApp?',
+  email:    'What did you email them?',
+  linkedin: 'What happened on LinkedIn? e.g. "Sent connection note"'
+};
+
+function armLog(type) {
+  document.querySelectorAll('.log-type').forEach(b =>
+    b.classList.toggle('selected', b.dataset.type === type));
+  selectedLogType = type;
+  const notes = $('log-notes');
+  notes.placeholder = ARM_PROMPTS[type] || 'What happened?';
+  notes.classList.remove('armed');
+  void notes.offsetWidth;          // restart the pulse animation
+  notes.classList.add('armed');
+  notes.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  toast('Logger ready — jot a note when you\'re done');
+}
+
+$('d-phone').addEventListener('click', (e) => {
+  const a = e.target.closest('a');
+  if (!a) return;
+  armLog(a.href.startsWith('tel:') ? 'call' : 'whatsapp');
+});
+
+$('d-email').addEventListener('click', (e) => {
+  if (e.target.closest('a')) armLog('email');
+});
+
+$('d-linkedin').addEventListener('click', (e) => {
+  if (e.target.closest('a')) armLog('linkedin');
 });
 
 $('log-save').addEventListener('click', async () => {
