@@ -328,6 +328,7 @@
     <button class="tab active" data-view="pipeline">Pipeline board</button>
     <button class="tab" data-view="leads">All leads</button>
     <button class="tab" data-view="due">Follow-ups due <span class="badge" id="due-badge" style="display:none">0</span></button>
+    <button class="tab" data-view="customers">Customers</button>
     <button class="tab" data-view="import">Import CSV</button>
     <button class="tab" data-view="templates">Templates</button>
   </div>
@@ -472,6 +473,10 @@
       <input type="text" id="n-phone" placeholder="Phone (+91...)">
     </div>
     <input type="text" id="n-linkedin" placeholder="LinkedIn URL">
+    <select id="n-type">
+      <option value="prospect">Type: prospect</option>
+      <option value="customer">Type: existing customer</option>
+    </select>
     <select id="n-source">
       <option value="other">Source: other</option>
       <option value="linkedin_post">From a LinkedIn post</option>
@@ -529,8 +534,18 @@ function suggestNextStep(l) {
     ? Math.floor((Date.now() - new Date(l.last_contacted).getTime()) / 86400000)
     : null;
 
-  if (l.next_followup && l.next_followup < t && l.status !== 'won' && l.status !== 'lost')
+  if (l.next_followup && l.next_followup < t
+      && (l.account_type === 'customer' || (l.status !== 'won' && l.status !== 'lost')))
     return 'Follow-up is OVERDUE (' + l.next_followup + ') — reach out today.';
+
+  // existing customers get account-management suggestions, not sales ones
+  if (l.account_type === 'customer') {
+    if (!l.next_followup)
+      return 'Customer — set the next check-in or renewal date so they never go quiet.';
+    if (daysSince !== null && daysSince >= 30)
+      return daysSince + ' days since last touch — customers who feel forgotten churn. Check in.';
+    return 'Customer — next check-in ' + l.next_followup + '. Look for upsell/renewal signals.';
+  }
 
   switch (l.status) {
     case 'new':
@@ -640,8 +655,10 @@ async function loadLeads() {
 
 function dueLeads() {
   const t = todayStr();
+  // customers ALWAYS count (check-ins/renewals matter after the win);
+  // prospects only while the deal is still alive
   return leads.filter(l => l.next_followup && l.next_followup <= t
-    && l.status !== 'won' && l.status !== 'lost');
+    && (l.account_type === 'customer' || (l.status !== 'won' && l.status !== 'lost')));
 }
 
 // ===================== STATS =====================
@@ -649,10 +666,12 @@ function renderStats() {
   const by = {};
   leads.forEach(l => { by[l.status] = (by[l.status] || 0) + 1; });
   const due = dueLeads().length;
-  const active = leads.length - (by.won || 0) - (by.lost || 0);
+  const customers = leads.filter(l => l.account_type === 'customer').length;
+  const active = leads.length - (by.won || 0) - (by.lost || 0) - customers;
   $('stats').innerHTML =
     stat(leads.length, 'total') +
     stat(active, 'active') +
+    stat(customers, 'customers') +
     stat(by.discovery || 0, 'discovery') +
     stat(by.proposal || 0, 'proposal') +
     stat(by.negotiation || 0, 'negotiation') +
@@ -672,7 +691,7 @@ function stat(n, label, alert) {
 function renderBoard() {
   const t = todayStr();
   $('board').innerHTML = STAGES.map(s => {
-    const items = leads.filter(l => l.status === s.value);
+    const items = leads.filter(l => l.status === s.value && l.account_type !== 'customer');
     const cards = items.map(l => {
       const overdue = l.next_followup && l.next_followup < t && s.value !== 'won' && s.value !== 'lost';
       return '<div class="k-card" data-id="' + l.id + '">' +
@@ -725,7 +744,9 @@ function renderTable() {
   const fsrc = $('filter-source').value;
 
   const fb = $('filter-bounce').value;
-  let rows = currentView === 'due' ? dueLeads() : leads;
+  let rows = currentView === 'due' ? dueLeads()
+    : currentView === 'customers' ? leads.filter(l => l.account_type === 'customer')
+    : leads;
   rows = rows.filter(l =>
     (!q || (l.name + ' ' + (l.company || '') + ' ' + (l.email || '')).toLowerCase().includes(q)) &&
     (!fs || l.status === fs) &&
@@ -742,6 +763,7 @@ function renderTable() {
     const overdue = l.next_followup && l.next_followup < t && l.status !== 'won' && l.status !== 'lost';
     return '<tr data-id="' + l.id + '">' +
       '<td><strong>' + esc(l.name) + '</strong>' +
+        (l.account_type === 'customer' ? ' <span class="pill st-won">customer</span>' : '') +
         (l.email_bounced ? ' <span class="pill st-lost">email bounced</span>' : '') +
         (l.title ? '<div class="muted" style="font-size:12px">' + esc(l.title) + '</div>' : '') + '</td>' +
       '<td>' + esc(l.company) + '</td>' +
@@ -772,11 +794,11 @@ document.querySelectorAll('.tab').forEach(tab => {
     currentView = v;
     $('view-detail').style.display = 'none';
     $('view-pipeline').style.display = v === 'pipeline' ? 'block' : 'none';
-    $('view-leads').style.display = (v === 'leads' || v === 'due') ? 'block' : 'none';
+    $('view-leads').style.display = (v === 'leads' || v === 'due' || v === 'customers') ? 'block' : 'none';
     $('view-import').style.display = v === 'import' ? 'block' : 'none';
     $('view-templates').style.display = v === 'templates' ? 'block' : 'none';
     if (v === 'pipeline') { renderBoard(); loadActivity(); loadGameData(); }
-    if (v === 'leads' || v === 'due') renderTable();
+    if (v === 'leads' || v === 'due' || v === 'customers') renderTable();
     if (v === 'templates') renderTemplateList();
   });
 });
@@ -1232,6 +1254,7 @@ $('add-lead-btn').addEventListener('click', () => {
   $('modal-title').textContent = 'Add lead';
   ['n-name','n-company','n-title','n-email','n-phone','n-linkedin','n-notes'].forEach(id => $(id).value = '');
   $('n-source').value = 'other';
+  $('n-type').value = 'prospect';
   $('add-overlay').classList.add('open');
 });
 
@@ -1246,6 +1269,7 @@ $('edit-lead-btn').addEventListener('click', () => {
   $('n-phone').value = currentLead.phone || '';
   $('n-linkedin').value = currentLead.linkedin_url || '';
   $('n-source').value = currentLead.source || 'other';
+  $('n-type').value = currentLead.account_type || 'prospect';
   $('n-notes').value = currentLead.notes || '';
   $('add-overlay').classList.add('open');
 });
@@ -1267,6 +1291,7 @@ $('add-save').addEventListener('click', async () => {
     phone: $('n-phone').value.trim() || null,
     linkedin_url: $('n-linkedin').value.trim() || null,
     source: $('n-source').value,
+    account_type: $('n-type').value,
     notes: $('n-notes').value.trim() || null
   };
 
@@ -1329,7 +1354,7 @@ $('csv-file').addEventListener('change', async (e) => {
   const rows = parseCSV(text);
   if (rows.length < 2) { $('import-preview').textContent = 'Could not find data rows.'; return; }
 
-  const known = ['name', 'company', 'title', 'email', 'phone', 'linkedin_url', 'source', 'notes'];
+  const known = ['name', 'company', 'title', 'email', 'phone', 'linkedin_url', 'source', 'account_type', 'notes'];
   const headers = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
 
   csvRows = rows.slice(1).map(r => {
@@ -1378,7 +1403,7 @@ $('export-btn').addEventListener('click', () => {
     (!fsrc || l.source === fsrc)
   );
 
-  const cols = ['name','company','title','email','phone','linkedin_url','source','status','email_bounced','next_step','next_followup','last_contacted','notes'];
+  const cols = ['name','company','title','email','phone','linkedin_url','source','account_type','status','email_bounced','next_step','next_followup','last_contacted','notes'];
   const csvEsc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const csv = cols.join(',') + '\n' +
     rows.map(l => cols.map(c => csvEsc(l[c])).join(',')).join('\n');
