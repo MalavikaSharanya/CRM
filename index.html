@@ -342,6 +342,11 @@
         <option>linkedin_post</option><option>linkedin</option><option>cold</option>
         <option>referral</option><option>event</option><option>whatsapp</option><option>other</option>
       </select>
+      <select id="filter-bounce">
+        <option value="">All emails</option>
+        <option value="bounced">Bounced only</option>
+        <option value="ok">Not bounced</option>
+      </select>
       <button id="add-lead-btn">+ Add lead</button>
       <button class="secondary" id="export-btn">Export CSV</button>
     </div>
@@ -361,6 +366,7 @@
   <div id="view-detail" style="display:none">
     <div class="controls">
       <button class="secondary" id="back-btn">← Back</button>
+      <button class="secondary" id="edit-lead-btn">Edit lead</button>
       <button class="secondary" id="delete-lead-btn" style="color:#b91c1c">Delete lead</button>
     </div>
     <div class="card">
@@ -378,6 +384,7 @@
         <div class="detail-col">
           <h3 class="section">Details</h3>
           <div class="field-row"><div class="k">Email</div><div id="d-email" class="v"></div></div>
+          <div class="field-row"><button class="secondary small" id="d-bounce"></button></div>
           <div class="field-row"><div class="k">Phone</div><div id="d-phone" class="v"></div></div>
           <div class="field-row"><div class="k">LinkedIn</div><div id="d-linkedin" class="v"></div></div>
           <div class="field-row"><div class="k">Source</div><div id="d-source" class="v"></div></div>
@@ -446,7 +453,7 @@
 
 <div class="overlay" id="add-overlay">
   <div class="modal">
-    <h2>Add lead</h2>
+    <h2 id="modal-title">Add lead</h2>
     <input type="text" id="n-name" placeholder="Name *">
     <div class="two-col">
       <input type="text" id="n-company" placeholder="Company">
@@ -709,11 +716,13 @@ function renderTable() {
   const fs = $('filter-status').value;
   const fsrc = $('filter-source').value;
 
+  const fb = $('filter-bounce').value;
   let rows = currentView === 'due' ? dueLeads() : leads;
   rows = rows.filter(l =>
     (!q || (l.name + ' ' + (l.company || '') + ' ' + (l.email || '')).toLowerCase().includes(q)) &&
     (!fs || l.status === fs) &&
-    (!fsrc || l.source === fsrc)
+    (!fsrc || l.source === fsrc) &&
+    (!fb || (fb === 'bounced' ? l.email_bounced : !l.email_bounced))
   );
 
   if (currentView === 'due') {
@@ -725,6 +734,7 @@ function renderTable() {
     const overdue = l.next_followup && l.next_followup < t && l.status !== 'won' && l.status !== 'lost';
     return '<tr data-id="' + l.id + '">' +
       '<td><strong>' + esc(l.name) + '</strong>' +
+        (l.email_bounced ? ' <span class="pill st-lost">email bounced</span>' : '') +
         (l.title ? '<div class="muted" style="font-size:12px">' + esc(l.title) + '</div>' : '') + '</td>' +
       '<td>' + esc(l.company) + '</td>' +
       '<td><span class="pill st-' + l.status + '">' + stageLabel(l.status) + '</span></td>' +
@@ -737,7 +747,7 @@ function renderTable() {
   $('empty-state').style.display = rows.length ? 'none' : 'block';
 }
 
-['search', 'filter-status', 'filter-source'].forEach(id =>
+['search', 'filter-status', 'filter-source', 'filter-bounce'].forEach(id =>
   $(id).addEventListener('input', renderTable));
 
 $('leads-tbody').addEventListener('click', (e) => {
@@ -808,9 +818,34 @@ async function openDetail(id) {
   document.querySelectorAll('.log-type').forEach(b => b.classList.remove('selected'));
 
   renderSuggestion();
+  renderBounceBtn();
   updateTplPreview();
   await loadTimeline();
 }
+
+function renderBounceBtn() {
+  const b = $('d-bounce');
+  if (currentLead.email_bounced) {
+    b.textContent = 'Email bounced ⚠ — click to mark as fixed';
+    b.style.color = '#b91c1c';
+    b.style.borderColor = '#b91c1c';
+  } else {
+    b.textContent = 'Mark email as bounced';
+    b.style.color = '';
+    b.style.borderColor = '';
+  }
+}
+
+$('d-bounce').addEventListener('click', async () => {
+  const newVal = !currentLead.email_bounced;
+  const { error } = await db.from('leads')
+    .update({ email_bounced: newVal })
+    .eq('id', currentLead.id);
+  if (error) { toast(error.message); return; }
+  currentLead.email_bounced = newVal;
+  renderBounceBtn();
+  toast(newVal ? 'Marked as bounced' : 'Marked as fixed');
+});
 
 function renderSuggestion() {
   $('suggest-bar').innerHTML = '<strong>Suggested next step</strong>' + esc(suggestNextStep(currentLead));
@@ -1133,9 +1168,38 @@ function confetti() {
   }
 }
 
-// ===================== ADD LEAD =====================
-$('add-lead-btn').addEventListener('click', () => $('add-overlay').classList.add('open'));
-$('add-cancel').addEventListener('click', () => $('add-overlay').classList.remove('open'));
+// ===================== ADD / EDIT LEAD =====================
+// The same modal handles both: editingLeadId decides whether Save
+// creates a new row (null) or updates an existing one.
+let editingLeadId = null;
+
+$('add-lead-btn').addEventListener('click', () => {
+  editingLeadId = null;
+  $('modal-title').textContent = 'Add lead';
+  ['n-name','n-company','n-title','n-email','n-phone','n-linkedin','n-notes'].forEach(id => $(id).value = '');
+  $('n-source').value = 'other';
+  $('add-overlay').classList.add('open');
+});
+
+$('edit-lead-btn').addEventListener('click', () => {
+  if (!currentLead) return;
+  editingLeadId = currentLead.id;
+  $('modal-title').textContent = 'Edit lead';
+  $('n-name').value = currentLead.name || '';
+  $('n-company').value = currentLead.company || '';
+  $('n-title').value = currentLead.title || '';
+  $('n-email').value = currentLead.email || '';
+  $('n-phone').value = currentLead.phone || '';
+  $('n-linkedin').value = currentLead.linkedin_url || '';
+  $('n-source').value = currentLead.source || 'other';
+  $('n-notes').value = currentLead.notes || '';
+  $('add-overlay').classList.add('open');
+});
+
+$('add-cancel').addEventListener('click', () => {
+  editingLeadId = null;
+  $('add-overlay').classList.remove('open');
+});
 
 $('add-save').addEventListener('click', async () => {
   const name = $('n-name').value.trim();
@@ -1152,6 +1216,20 @@ $('add-save').addEventListener('click', async () => {
     notes: $('n-notes').value.trim() || null
   };
 
+  if (editingLeadId) {
+    // UPDATE the existing row
+    const { error } = await db.from('leads').update(lead).eq('id', editingLeadId);
+    if (error) { toast(error.message); return; }
+    Object.assign(currentLead, lead);
+    $('add-overlay').classList.remove('open');
+    editingLeadId = null;
+    await openDetail(currentLead.id);   // redraw the detail page with fresh values
+    renderStats();
+    toast('Lead updated');
+    return;
+  }
+
+  // otherwise INSERT a new row
   const { data, error } = await db.from('leads').insert(lead).select().single();
   if (error) { toast(error.message); return; }
 
@@ -1246,7 +1324,7 @@ $('export-btn').addEventListener('click', () => {
     (!fsrc || l.source === fsrc)
   );
 
-  const cols = ['name','company','title','email','phone','linkedin_url','source','status','next_step','next_followup','last_contacted','notes'];
+  const cols = ['name','company','title','email','phone','linkedin_url','source','status','email_bounced','next_step','next_followup','last_contacted','notes'];
   const csvEsc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const csv = cols.join(',') + '\n' +
     rows.map(l => cols.map(c => csvEsc(l[c])).join(',')).join('\n');
