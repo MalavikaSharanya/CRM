@@ -794,20 +794,28 @@ async function openDetail(id) {
 
   $('d-name').textContent = currentLead.name;
   $('d-sub').textContent = [currentLead.title, currentLead.company].filter(Boolean).join(' · ');
-  $('d-email').innerHTML = currentLead.email
-    ? '<a href="mailto:' + esc(currentLead.email) + '">' + esc(currentLead.email) + '</a>' : '—';
+  // Cells may hold several emails/phones separated by "/" —
+  // split them and give each its own line and its own links.
+  const emails = (currentLead.email || '').split('/').map(s => s.trim()).filter(Boolean);
+  $('d-email').innerHTML = emails.length
+    ? emails.map(em =>
+        '<div><a href="mailto:' + esc(em) + '">' + esc(em) + '</a></div>'
+      ).join('')
+    : '—';
 
-  // tel: needs the + (tells the dialer it's a full international
-  // number); wa.me wants digits WITHOUT the + . Two formats, one phone.
-  const rawPhone = (currentLead.phone || '').trim();
-  let digits = rawPhone.replace(/[^0-9]/g, '');
-  if (digits.length === 10) digits = '91' + digits;   // bare Indian mobile → add country code
-  const telNum = '+' + digits;
-  $('d-phone').innerHTML = rawPhone
-    ? '<a href="tel:' + telNum + '">' + esc(rawPhone) + '</a>' +
-      (digits.length >= 11
-        ? ' &nbsp;·&nbsp; <a href="https://wa.me/' + digits + '" target="_blank">WhatsApp ↗</a>'
-        : ' <span class="muted">(add country code for WhatsApp link)</span>')
+  // tel: needs the + (full international number);
+  // wa.me wants digits WITHOUT the + . Two formats, one phone.
+  const phones = (currentLead.phone || '').split('/').map(s => s.trim()).filter(Boolean);
+  $('d-phone').innerHTML = phones.length
+    ? phones.map(ph => {
+        let digits = ph.replace(/[^0-9]/g, '');
+        if (digits.length === 10) digits = '91' + digits;   // bare Indian mobile → add country code
+        return '<div><a href="tel:+' + digits + '">' + esc(ph) + '</a>' +
+          (digits.length >= 11
+            ? ' &nbsp;·&nbsp; <a href="https://wa.me/' + digits + '" target="_blank">WhatsApp ↗</a>'
+            : ' <span class="muted">(add country code for WhatsApp)</span>') +
+        '</div>';
+      }).join('')
     : '—';
 
   // URLs saved without https:// would open as broken relative links —
