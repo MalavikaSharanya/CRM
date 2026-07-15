@@ -875,12 +875,21 @@ async function openDetail(id) {
       }).join('')
     : '—';
 
-  // URLs saved without https:// would open as broken relative links —
-  // normalize them before building the anchor.
+  // LinkedIn cell may hold: a real URL, a URL missing https://,
+  // or just display text ("Name | LinkedIn") — handle all three.
   let li = (currentLead.linkedin_url || '').trim();
-  if (li && !/^https?:\/\//i.test(li)) li = 'https://' + li;
-  $('d-linkedin').innerHTML = li
-    ? '<a href="' + esc(li) + '" target="_blank">profile ↗</a>' : '—';
+  const isRealUrl = /linkedin\.com\//i.test(li);
+  const searchUrl = 'https://www.linkedin.com/search/results/people/?keywords='
+    + encodeURIComponent((currentLead.name || '') + ' ' + (currentLead.company || ''));
+  if (isRealUrl) {
+    if (!/^https?:\/\//i.test(li)) li = 'https://' + li;
+    $('d-linkedin').innerHTML = '<a href="' + esc(li) + '" target="_blank">profile ↗</a>';
+  } else {
+    // no usable URL: ask for one, with a search link to help find it
+    $('d-linkedin').innerHTML =
+      '<button class="secondary small" id="d-li-fix">+ Add LinkedIn URL</button> ' +
+      '<a href="' + searchUrl + '" target="_blank" class="muted" style="font-size:13px">find them ↗</a>';
+  }
   $('d-source').textContent = currentLead.source || '—';
   $('d-notes').textContent = currentLead.notes || '—';
   $('d-status').value = currentLead.status;
@@ -1057,6 +1066,12 @@ $('d-email').addEventListener('click', (e) => {
 });
 
 $('d-linkedin').addEventListener('click', (e) => {
+  // the "+ Add LinkedIn URL" button opens Edit lead with the URL field focused
+  if (e.target.id === 'd-li-fix') {
+    $('edit-lead-btn').click();
+    setTimeout(() => $('n-linkedin').focus(), 150);
+    return;
+  }
   if (e.target.closest('a')) armLog('linkedin');
 });
 
