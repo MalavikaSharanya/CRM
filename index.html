@@ -155,6 +155,7 @@
   .st-negotiation { background: #ffedd5; color: #9a3412; }
   .st-won         { background: #d1fae5; color: #065f46; }
   .st-lost        { background: #fee2e2; color: #991b1b; }
+  .st-not_interested { background: #f3f4f6; color: #6b7280; }
 
   .overdue { color: #b91c1c; font-weight: 600; }
   .muted { color: #9ca3af; }
@@ -530,9 +531,13 @@ const STAGES = [
   { value: 'discovery',   label: 'Discovery call set' },
   { value: 'proposal',    label: 'Proposal submitted' },
   { value: 'negotiation', label: 'Negotiation' },
-  { value: 'won',         label: 'Closed won' },
-  { value: 'lost',        label: 'Closed lost' }
+  { value: 'won',            label: 'Closed won' },
+  { value: 'lost',           label: 'Closed lost' },
+  { value: 'not_interested', label: 'Not interested' }
 ];
+
+// terminal stages: no follow-up nagging, no "overdue" alarms
+const CLOSED = ['won', 'lost', 'not_interested'];
 
 const stageLabel = (v) => (STAGES.find(s => s.value === v) || { label: v }).label;
 
@@ -552,7 +557,8 @@ function suggestNextStep(l) {
     : null;
 
   if (l.next_followup && l.next_followup < t
-      && (l.account_type === 'customer' || (l.status !== 'won' && l.status !== 'lost')))
+      && (l.account_type === 'customer' || l.account_type === 'partner'
+          || !CLOSED.includes(l.status)))
     return 'Follow-up is OVERDUE (' + l.next_followup + ') — reach out today.';
 
   // existing customers get account-management suggestions, not sales ones
@@ -594,6 +600,8 @@ function suggestNextStep(l) {
       return 'Closed! Ask for a referral and log the handover.';
     case 'lost':
       return 'Log why it was lost — set a follow-up ~90 days out to revisit.';
+    case 'not_interested':
+      return 'Log the reason — "not interested" today often means "wrong timing." Revisit next renewal cycle.';
     default:
       return 'Log where things stand, set a next step.';
   }
@@ -683,9 +691,11 @@ function dueLeads() {
   const t = todayStr();
   // customers ALWAYS count (check-ins/renewals matter after the win);
   // prospects only while the deal is still alive
+  // a follow-up date fires for everyone except closed-won prospects —
+  // so "revisit in 6 months" on lost / not-interested leads still reminds you
   return leads.filter(l => l.next_followup && l.next_followup <= t
     && (l.account_type === 'customer' || l.account_type === 'partner'
-        || (l.status !== 'won' && l.status !== 'lost')));
+        || l.status !== 'won'));
 }
 
 // ===================== STATS =====================
@@ -695,7 +705,7 @@ function renderStats() {
   const due = dueLeads().length;
   const customers = leads.filter(l => l.account_type === 'customer').length;
   const partners = leads.filter(l => l.account_type === 'partner').length;
-  const active = leads.length - (by.won || 0) - (by.lost || 0) - customers - partners;
+  const active = leads.length - (by.won || 0) - (by.lost || 0) - (by.not_interested || 0) - customers - partners;
   $('stats').innerHTML =
     stat(leads.length, 'total') +
     stat(active, 'active') +
@@ -723,7 +733,7 @@ function renderBoard() {
     const items = leads.filter(l => l.status === s.value
     && l.account_type !== 'customer' && l.account_type !== 'partner');
     const cards = items.map(l => {
-      const overdue = l.next_followup && l.next_followup < t && s.value !== 'won' && s.value !== 'lost';
+      const overdue = l.next_followup && l.next_followup < t && !CLOSED.includes(s.value);
       return '<div class="k-card" data-id="' + l.id + '">' +
         '<div class="k-name">' + esc(l.name) + '</div>' +
         '<div class="k-co">' + esc(l.company || '—') + '</div>' +
@@ -791,7 +801,7 @@ function renderTable() {
 
   const t = todayStr();
   $('leads-tbody').innerHTML = rows.map(l => {
-    const overdue = l.next_followup && l.next_followup < t && l.status !== 'won' && l.status !== 'lost';
+    const overdue = l.next_followup && l.next_followup < t && !CLOSED.includes(l.status);
     return '<tr data-id="' + l.id + '">' +
       '<td><strong>' + esc(l.name) + '</strong>' +
         (l.account_type === 'customer' ? ' <span class="pill st-won">customer</span>' : '') +
