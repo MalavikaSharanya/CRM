@@ -1463,6 +1463,9 @@ function parseCSV(text) {
 $('csv-file').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  // picking a new file wakes the button back up
+  $('import-btn').disabled = false;
+  $('import-btn').textContent = 'Import these leads';
   const text = await file.text();
   const rows = parseCSV(text);
   if (rows.length < 2) { $('import-preview').textContent = 'Could not find data rows.'; return; }
@@ -1497,8 +1500,17 @@ $('import-btn').addEventListener('click', async () => {
     inserted += chunk.length;
   }
 
-  $('import-btn').disabled = false;
-  $('import-btn').textContent = 'Import these leads';
+  if (inserted === csvRows.length && inserted > 0) {
+    // success: the button goes numb until a NEW file is chosen,
+    // so the same file can't be imported twice by accident
+    $('import-btn').disabled = true;
+    $('import-btn').textContent = 'Imported ✓ — choose a new file to import more';
+    csvRows = [];
+  } else {
+    // partial/failed import: allow a retry
+    $('import-btn').disabled = false;
+    $('import-btn').textContent = 'Import these leads';
+  }
   $('import-preview').innerHTML += '<br><strong>Imported ' + inserted + ' leads ✓</strong>';
   toast('Imported ' + inserted + ' leads');
   await loadLeads();
