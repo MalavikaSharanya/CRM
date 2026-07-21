@@ -332,6 +332,7 @@
     <button class="tab" data-view="customers">Customers</button>
     <button class="tab" data-view="partners">Partners</button>
     <button class="tab" data-view="analytics">Analytics</button>
+    <button class="tab" data-view="sync">Sync to Excel <span class="badge" id="sync-badge" style="display:none">0</span></button>
     <button class="tab" data-view="import">Import CSV</button>
     <button class="tab" data-view="templates">Templates</button>
   </div>
@@ -451,6 +452,29 @@
       <p class="muted" style="font-size:12px; margin-top:10px">
         Counts come from your logged updates (notes and stage moves excluded).
         The more faithfully you log, the truer this picture.
+      </p>
+    </div>
+  </div>
+
+  <!-- SYNC TO EXCEL VIEW -->
+  <div id="view-sync" style="display:none">
+    <div class="card import-box">
+      <h3 style="font-size:16px; margin-bottom:8px">One-click export for outreach.xlsx</h3>
+      <p style="margin-bottom:6px">Downloads a CSV containing only leads that:</p>
+      <ul style="margin-bottom:12px; padding-left:22px; font-size:14px; color:#374151;">
+        <li>are marked <code>new</code> (prospects only, no customers/partners)</li>
+        <li>have a real email address (not bounced)</li>
+        <li>haven't been exported before</li>
+      </ul>
+      <p style="margin-bottom:12px">Columns match your <code>outreach.xlsx</code> Leads table exactly — copy the CSV rows and paste them at the bottom of the table.</p>
+      <div id="sync-preview" class="muted" style="font-size:14px; margin-bottom:12px">Loading...</div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap">
+        <button id="sync-download">Download CSV for outreach.xlsx</button>
+        <button class="secondary" id="sync-reexport">Re-export last batch</button>
+      </div>
+      <p class="muted" style="font-size:12px; margin-top:14px">
+        After download, these leads are stamped as synced so tomorrow's export won't repeat them.
+        The <em>Re-export last batch</em> button gives you the same file again in case Excel didn't accept the paste.
       </p>
     </div>
   </div>
@@ -685,6 +709,7 @@ async function loadLeads() {
   leads = data;
   renderStats();
   renderTable();
+  updateSyncBadge();
 }
 
 function dueLeads() {
@@ -840,10 +865,12 @@ document.querySelectorAll('.tab').forEach(tab => {
     $('view-import').style.display = v === 'import' ? 'block' : 'none';
     $('view-templates').style.display = v === 'templates' ? 'block' : 'none';
     $('view-analytics').style.display = v === 'analytics' ? 'block' : 'none';
+    $('view-sync').style.display = v === 'sync' ? 'block' : 'none';
     if (v === 'pipeline') { renderBoard(); loadActivity(); loadGameData(); }
     if (v === 'leads' || v === 'due' || v === 'customers' || v === 'partners') renderTable();
     if (v === 'templates') renderTemplateList();
     if (v === 'analytics') loadGameData().then(renderAnalytics);
+    if (v === 'sync') renderSyncPreview();
   });
 });
 
@@ -857,6 +884,7 @@ async function openDetail(id) {
   $('view-import').style.display = 'none';
   $('view-templates').style.display = 'none';
   $('view-analytics').style.display = 'none';
+  $('view-sync').style.display = 'none';
   $('view-detail').style.display = 'block';
 
   $('d-name').textContent = currentLead.name;
@@ -1304,6 +1332,99 @@ function renderGame() {
       g.badges.map(b => '<span class="bdg' + (b.on ? ' on' : '') + '">' + b.name + '</span>').join('') +
     '</div>';
 }
+
+// ===================== SYNC TO EXCEL =====================
+// Exports only new prospects with an email, that haven't been
+// exported before. Columns match outreach.xlsx exactly so pasting
+// at the bottom of the Leads table just works.
+const XLSX_COLS = [
+  'name','company','title','email','phone','linkedin_url','source','status',
+  'next_followup','last_contacted','notes','sent_date','followup_date','replied'
+];
+
+let lastExportedIds = [];   // remembered so "Re-export last batch" can repeat
+
+function eligibleForSync() {
+  return leads.filter(l =>
+    l.status === 'new' &&
+    l.account_type === 'prospect' &&
+    !l.email_bounced &&
+    l.email && l.email.trim() &&
+    !l.synced_to_excel_at
+  );
+}
+
+function updateSyncBadge() {
+  const n = eligibleForSync().length;
+  const b = $('sync-badge');
+  b.style.display = n > 0 ? 'inline' : 'none';
+  b.textContent = n;
+}
+
+function renderSyncPreview() {
+  const items = eligibleForSync();
+  updateSyncBadge();
+  $('sync-preview').innerHTML = items.length
+    ? '<strong>' + items.length + '</strong> lead(s) ready to sync to outreach.xlsx.'
+    : 'Nothing new to sync — everything is either already exported, has no email, or isn\'t a prospect.';
+  $('sync-download').disabled = items.length === 0;
+  $('sync-reexport').disabled = lastExportedIds.length === 0;
+}
+
+function csvEscape(v) {
+  return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+}
+
+function buildCsvForXlsx(rows) {
+  // Excel/Power Automate sometimes see sent_date, followup_date,
+  // replied populated already — we always leave those THREE blank
+  // so the flows treat these as fresh leads to email.
+  const lines = [XLSX_COLS.join(',')];
+  for (const l of rows) {
+    lines.push(XLSX_COLS.map(c => {
+      if (c === 'sent_date' || c === 'followup_date' || c === 'replied') return csvEscape('');
+      if (c === 'status') return csvEscape('new');
+      return csvEscape(l[c]);
+    }).join(','));
+  }
+  return lines.join('\n');
+}
+
+async function doExport(rows) {
+  if (!rows.length) { toast('Nothing to export'); return; }
+
+  const csv = buildCsvForXlsx(rows);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'outreach-newleads-' + todayStr() + '.csv';
+  a.click();
+
+  // Mark them synced in the database, so they don't show up next time
+  const now = new Date().toISOString();
+  const ids = rows.map(r => r.id);
+  const { error } = await db.from('leads')
+    .update({ synced_to_excel_at: now })
+    .in('id', ids);
+  if (error) { toast('Downloaded, but marking synced failed: ' + error.message); return; }
+
+  rows.forEach(r => { r.synced_to_excel_at = now; });
+  lastExportedIds = ids;
+  renderSyncPreview();
+  toast('Exported ' + rows.length + ' leads');
+}
+
+$('sync-download').addEventListener('click', () => doExport(eligibleForSync()));
+
+$('sync-reexport').addEventListener('click', () => {
+  if (!lastExportedIds.length) { toast('Nothing to re-export yet'); return; }
+  const rows = leads.filter(l => lastExportedIds.includes(l.id));
+  const csv = buildCsvForXlsx(rows);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'outreach-newleads-' + todayStr() + '-reexport.csv';
+  a.click();
+  toast('Re-exported last ' + rows.length + ' leads');
+});
 
 // ===================== ANALYTICS =====================
 function renderAnalytics() {
