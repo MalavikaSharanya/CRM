@@ -631,7 +631,7 @@
       </div>
       <table style="margin-bottom:12px">
         <thead>
-          <tr><th>Step</th><th>Day</th><th>Channel</th><th>Note</th><th></th></tr>
+          <tr><th>Step</th><th>Day</th><th>Channel</th><th>Template</th><th>Note</th><th></th></tr>
         </thead>
         <tbody id="seq-steps-tbody"></tbody>
       </table>
@@ -1618,16 +1618,25 @@ function renderToday() {
   const groups = channelOrder.map(ch => {
     const items = t.byChannel[ch] || [];
     if (!items.length) return '';
-    const rows = items.map(({ lead, step, overdueBy }) =>
-      '<div class="k-card" data-id="' + lead.id + '" style="display:flex; justify-content:space-between; align-items:center">' +
-        '<div>' +
+    const rows = items.map(({ lead, step, overdueBy }) => {
+      const tpl = step.template_id ? templates.find(t => t.id === Number(step.template_id)) : null;
+      const rightHtml = overdueBy > 0
+        ? '<div class="k-over">' + overdueBy + 'd overdue</div>'
+        : '';
+      const copyBtn = tpl
+        ? '<button class="secondary small today-copy" data-lead="' + lead.id + '" data-tpl="' + tpl.id + '" style="margin-left:8px">Copy message</button>'
+        : '';
+      return '<div class="k-card" data-id="' + lead.id + '" style="display:flex; justify-content:space-between; align-items:center; gap:10px">' +
+        '<div style="flex:1">' +
           '<div class="k-name">' + esc(lead.name) + '</div>' +
           '<div class="k-co">' + esc(lead.company || '—') + (lead.title ? ' · ' + esc(lead.title) : '') + '</div>' +
-          '<div class="k-next">' + esc(step.note || CHANNEL_LABEL[ch]) + '</div>' +
+          '<div class="k-next">' + esc(step.note || CHANNEL_LABEL[ch]) +
+            (tpl ? ' <span class="muted" style="font-size:11px">· ' + esc(tpl.title) + '</span>' : '') +
+          '</div>' +
         '</div>' +
-        (overdueBy > 0 ? '<div class="k-over">' + overdueBy + 'd overdue</div>' : '') +
-      '</div>'
-    ).join('');
+        '<div style="display:flex; align-items:center; gap:6px">' + rightHtml + copyBtn + '</div>' +
+      '</div>';
+    }).join('');
     return '<div style="margin-bottom:20px">' +
       '<h3 class="section" style="margin-bottom:8px">' + CHANNEL_LABEL[ch] + ' <span class="muted">(' + items.length + ')</span></h3>' +
       '<div class="card" style="padding:10px">' + rows + '</div>' +
@@ -1643,7 +1652,21 @@ function renderToday() {
           '<p>Run the sequences SQL, then open the Sequences tab to define your outreach cadence.</p></div>');
 }
 
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
+  // Copy message button
+  const cbtn = e.target.closest('.today-copy');
+  if (cbtn) {
+    e.stopPropagation();
+    const lead = leads.find(l => l.id === Number(cbtn.dataset.lead));
+    const tpl = templates.find(t => t.id === Number(cbtn.dataset.tpl));
+    if (!lead || !tpl) { toast('Template or lead missing'); return; }
+    const text = fillTemplate(tpl.body, lead);
+    try { await navigator.clipboard.writeText(text); }
+    catch { prompt('Copy this:', text); }
+    toast('Copied — paste in ' + (tpl.channel === 'whatsapp' ? 'WhatsApp' : tpl.channel === 'linkedin' ? 'LinkedIn' : tpl.channel));
+    return;
+  }
+  // Regular card click → open lead detail
   if (e.target.closest('#today-groups .k-card')) {
     const id = Number(e.target.closest('.k-card').dataset.id);
     openDetail(id);
@@ -1658,8 +1681,14 @@ function renderSequenceEditor() {
   }
   $('seq-batch').value = currentSequence.batch_size || 20;
   const steps = currentSequence.steps || [];
-  $('seq-steps-tbody').innerHTML = steps.map((s, i) =>
-    '<tr>' +
+  $('seq-steps-tbody').innerHTML = steps.map((s, i) => {
+    // Templates whose channel matches this step's channel
+    const matching = templates.filter(t => t.channel === s.channel);
+    const tplOpts = '<option value="">— none —</option>' +
+      matching.map(t => '<option value="' + t.id + '"' +
+        (Number(s.template_id) === t.id ? ' selected' : '') + '>' +
+        esc(t.title) + '</option>').join('');
+    return '<tr>' +
       '<td>' + (i + 1) + '</td>' +
       '<td><input type="number" min="0" value="' + (s.day || 0) + '" data-i="' + i + '" data-k="day" style="width:70px; margin-bottom:0"></td>' +
       '<td><select data-i="' + i + '" data-k="channel" style="margin-bottom:0">' +
@@ -1667,10 +1696,13 @@ function renderSequenceEditor() {
           '<option value="' + ch + '"' + (s.channel === ch ? ' selected' : '') + '>' + CHANNEL_LABEL[ch] + '</option>'
         ).join('') +
       '</select></td>' +
+      '<td><select data-i="' + i + '" data-k="template_id" style="margin-bottom:0; min-width:140px">' +
+        tplOpts +
+      '</select></td>' +
       '<td><input type="text" value="' + esc(s.note || '') + '" data-i="' + i + '" data-k="note" style="margin-bottom:0"></td>' +
       '<td><button class="secondary small" data-del="' + i + '" style="color:#b91c1c">✕</button></td>' +
-    '</tr>'
-  ).join('');
+    '</tr>';
+  }).join('');
 }
 
 $('seq-steps-tbody').addEventListener('click', (e) => {
@@ -1687,7 +1719,18 @@ $('seq-steps-tbody').addEventListener('input', (e) => {
   const k = el.getAttribute('data-k');
   if (i === null) return;
   const s = currentSequence.steps[Number(i)];
-  s[k] = k === 'day' ? Number(el.value) : el.value;
+  if (k === 'day') s.day = Number(el.value);
+  else if (k === 'template_id') s.template_id = el.value ? Number(el.value) : null;
+  else s[k] = el.value;
+  // If the channel changed, the previously-selected template may no longer match — re-render.
+  if (k === 'channel') renderSequenceEditor();
+});
+// select changes fire 'change' not 'input' in some browsers — handle both:
+$('seq-steps-tbody').addEventListener('change', (e) => {
+  if (e.target.tagName === 'SELECT') {
+    const evt = new Event('input', { bubbles: true });
+    e.target.dispatchEvent(evt);
+  }
 });
 
 $('seq-add-step').addEventListener('click', () => {
