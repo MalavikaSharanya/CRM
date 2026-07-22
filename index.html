@@ -326,18 +326,26 @@
   <div class="stats" id="stats"></div>
 
   <div class="tabs">
-    <button class="tab active" data-view="pipeline">Pipeline board</button>
+    <button class="tab active" data-view="today">Today <span class="badge" id="today-badge" style="display:none">0</span></button>
+    <button class="tab" data-view="pipeline">Pipeline board</button>
     <button class="tab" data-view="leads">All leads</button>
     <button class="tab" data-view="due">Follow-ups due <span class="badge" id="due-badge" style="display:none">0</span></button>
     <button class="tab" data-view="customers">Customers</button>
     <button class="tab" data-view="partners">Partners</button>
     <button class="tab" data-view="analytics">Analytics</button>
     <button class="tab" data-view="sync">Sync to Excel <span class="badge" id="sync-badge" style="display:none">0</span></button>
+    <button class="tab" data-view="sequences">Sequences</button>
     <button class="tab" data-view="import">Import CSV</button>
     <button class="tab" data-view="templates">Templates</button>
   </div>
 
-  <div id="view-pipeline">
+  <!-- TODAY VIEW -->
+  <div id="view-today">
+    <div class="stats" id="today-chips"></div>
+    <div id="today-groups"></div>
+  </div>
+
+  <div id="view-pipeline" style="display:none"
     <div class="game" id="game-bar"></div>
     <div class="board" id="board"></div>
     <div class="activity">
@@ -402,6 +410,14 @@
           <div class="field-row"><div class="k">LinkedIn</div><div id="d-linkedin" class="v"></div></div>
           <div class="field-row"><div class="k">Source</div><div id="d-source" class="v"></div></div>
           <div class="field-row"><div class="k">Notes</div><div id="d-notes" class="v"></div></div>
+          <h3 class="section" style="margin-top:20px">Sequence</h3>
+          <div id="d-sequence" style="font-size:14px; margin-bottom:8px"></div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px">
+            <button class="secondary small" id="d-enroll">Enroll in sequence</button>
+            <button class="secondary small" id="d-pause">Pause</button>
+            <button class="secondary small" id="d-unenroll" style="color:#b91c1c">Unenroll</button>
+          </div>
+
           <h3 class="section" style="margin-top:20px">Your planned next step</h3>
           <input type="text" id="d-nextstep" placeholder="e.g. Send proposal draft by Thursday">
           <h3 class="section" style="margin-top:8px">Next follow-up date</h3>
@@ -453,6 +469,27 @@
         Counts come from your logged updates (notes and stage moves excluded).
         The more faithfully you log, the truer this picture.
       </p>
+    </div>
+  </div>
+
+  <!-- SEQUENCES VIEW -->
+  <div id="view-sequences" style="display:none">
+    <div class="card import-box">
+      <h3 style="font-size:16px; margin-bottom:8px">Outreach sequence</h3>
+      <p style="margin-bottom:12px">Define the touches to run for each enrolled lead. Days count from when they were enrolled. Steps auto-advance as you log matching interactions.</p>
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap">
+        <label style="font-size:14px">Batch size per channel per day:</label>
+        <input type="number" id="seq-batch" min="1" max="100" style="width:80px; margin-bottom:0">
+        <button class="secondary small" id="seq-save-batch">Save cap</button>
+      </div>
+      <table style="margin-bottom:12px">
+        <thead>
+          <tr><th>Step</th><th>Day</th><th>Channel</th><th>Note</th><th></th></tr>
+        </thead>
+        <tbody id="seq-steps-tbody"></tbody>
+      </table>
+      <button class="secondary" id="seq-add-step">+ Add step</button>
+      <button id="seq-save" style="margin-left:8px">Save sequence</button>
     </div>
   </div>
 
@@ -636,8 +673,9 @@ let leads = [];
 let currentLead = null;
 let selectedLogType = null;
 let csvRows = [];
-let currentView = 'pipeline';
+let currentView = 'today';
 let allInteractions = [];
+let currentSequence = null;
 
 // ===================== GAME RULES (tune freely!) =====================
 const POINTS = { call: 5, email: 3, linkedin: 3, whatsapp: 3, meeting: 10, note: 1 };
@@ -693,7 +731,9 @@ $('logout-btn').addEventListener('click', async () => {
 async function showApp() {
   $('login-screen').style.display = 'none';
   $('app').style.display = 'block';
+  await loadSequence();
   await loadLeads();
+  renderToday();
   renderBoard();
   loadActivity();
   loadGameData();
@@ -860,7 +900,9 @@ document.querySelectorAll('.tab').forEach(tab => {
     const v = tab.dataset.view;
     currentView = v;
     $('view-detail').style.display = 'none';
+    $('view-today').style.display = v === 'today' ? 'block' : 'none';
     $('view-pipeline').style.display = v === 'pipeline' ? 'block' : 'none';
+    $('view-sequences').style.display = v === 'sequences' ? 'block' : 'none';
     $('view-leads').style.display = (v === 'leads' || v === 'due' || v === 'customers' || v === 'partners') ? 'block' : 'none';
     $('view-import').style.display = v === 'import' ? 'block' : 'none';
     $('view-templates').style.display = v === 'templates' ? 'block' : 'none';
@@ -871,6 +913,8 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (v === 'templates') renderTemplateList();
     if (v === 'analytics') loadGameData().then(renderAnalytics);
     if (v === 'sync') renderSyncPreview();
+    if (v === 'today') renderToday();
+    if (v === 'sequences') renderSequenceEditor();
   });
 });
 
@@ -879,12 +923,14 @@ async function openDetail(id) {
   currentLead = leads.find(l => l.id === id);
   if (!currentLead) return;
 
+  $('view-today').style.display = 'none';
   $('view-pipeline').style.display = 'none';
   $('view-leads').style.display = 'none';
   $('view-import').style.display = 'none';
   $('view-templates').style.display = 'none';
   $('view-analytics').style.display = 'none';
   $('view-sync').style.display = 'none';
+  $('view-sequences').style.display = 'none';
   $('view-detail').style.display = 'block';
 
   $('d-name').textContent = currentLead.name;
@@ -939,6 +985,7 @@ async function openDetail(id) {
 
   renderSuggestion();
   renderBounceBtn();
+  renderLeadSequenceBox();
   updateTplPreview();
   await loadTimeline();
 }
@@ -1126,6 +1173,16 @@ $('log-save').addEventListener('click', async () => {
 
   const updates = { last_contacted: new Date().toISOString() };
   if (currentLead.status === 'new' && selectedLogType !== 'note') updates.status = 'contacted';
+
+  // If this interaction matches the current sequence step, auto-advance.
+  if (currentLead.sequence_id && !currentLead.sequence_paused && currentSequence) {
+    const steps = currentSequence.steps || [];
+    const stepIdx = currentLead.sequence_step || 0;
+    if (stepIdx < steps.length && steps[stepIdx].channel === selectedLogType) {
+      updates.sequence_step = stepIdx + 1;
+    }
+  }
+
   await db.from('leads').update(updates).eq('id', currentLead.id);
   Object.assign(currentLead, updates);
 
@@ -1133,6 +1190,8 @@ $('log-save').addEventListener('click', async () => {
   $('d-status').value = currentLead.status;
   renderStats();
   renderSuggestion();
+  renderLeadSequenceBox();
+  renderToday();
   await loadTimeline();
   loadGameData();
   toast('Update logged +' + (POINTS[selectedLogType] || 1) + ' pts');
@@ -1332,6 +1391,236 @@ function renderGame() {
       g.badges.map(b => '<span class="bdg' + (b.on ? ' on' : '') + '">' + b.name + '</span>').join('') +
     '</div>';
 }
+
+// ===================== SEQUENCES =====================
+async function loadSequence() {
+  const { data, error } = await db.from('sequences').select('*').order('id').limit(1);
+  if (error || !data || !data.length) { currentSequence = null; return; }
+  currentSequence = data[0];
+}
+
+// Which touches are due for each enrolled lead today (or overdue).
+// Returns { total, byChannel: { call: [...], email: [...], ... } }
+function todaysActions() {
+  const result = { total: 0, byChannel: { call: [], email: [], whatsapp: [], linkedin: [] } };
+  if (!currentSequence) return result;
+
+  const steps = currentSequence.steps || [];
+  const batchSize = currentSequence.batch_size || 20;
+  const now = Date.now();
+
+  for (const l of leads) {
+    if (!l.sequence_id || l.sequence_paused) continue;
+    if (l.status === 'won' || l.status === 'lost' || l.status === 'not_interested') continue;
+    if (l.email_bounced) continue;
+
+    const started = l.sequence_started_at ? new Date(l.sequence_started_at).getTime() : now;
+    const daysSince = Math.floor((now - started) / 86400000);
+    const stepIdx = l.sequence_step || 0;
+    if (stepIdx >= steps.length) continue;
+
+    const step = steps[stepIdx];
+    if (step.day <= daysSince) {
+      const ch = step.channel;
+      if (!result.byChannel[ch]) result.byChannel[ch] = [];
+      result.byChannel[ch].push({ lead: l, step, overdueBy: daysSince - step.day });
+    }
+  }
+
+  // Apply batch cap per channel and count total
+  for (const ch of Object.keys(result.byChannel)) {
+    // Prioritise most overdue first, then oldest enrolled
+    result.byChannel[ch].sort((a, b) => b.overdueBy - a.overdueBy);
+    result.byChannel[ch] = result.byChannel[ch].slice(0, batchSize);
+    result.total += result.byChannel[ch].length;
+  }
+  return result;
+}
+
+const CHANNEL_LABEL = { call: 'Call', email: 'Email', whatsapp: 'WhatsApp', linkedin: 'LinkedIn' };
+const CHANNEL_ICON  = { call: '📞', email: '✉️', whatsapp: '💬', linkedin: 'in' };
+
+function renderToday() {
+  const t = todaysActions();
+  const badge = $('today-badge');
+  badge.style.display = t.total > 0 ? 'inline' : 'none';
+  badge.textContent = t.total;
+
+  $('today-chips').innerHTML =
+    stat(t.total, 'total touches', t.total > 0) +
+    stat(t.byChannel.call.length, 'calls') +
+    stat(t.byChannel.email.length, 'emails') +
+    stat(t.byChannel.whatsapp.length, 'whatsapp') +
+    stat(t.byChannel.linkedin.length, 'linkedin');
+
+  const channelOrder = ['call', 'email', 'whatsapp', 'linkedin'];
+  const groups = channelOrder.map(ch => {
+    const items = t.byChannel[ch] || [];
+    if (!items.length) return '';
+    const rows = items.map(({ lead, step, overdueBy }) =>
+      '<div class="k-card" data-id="' + lead.id + '" style="display:flex; justify-content:space-between; align-items:center">' +
+        '<div>' +
+          '<div class="k-name">' + esc(lead.name) + '</div>' +
+          '<div class="k-co">' + esc(lead.company || '—') + (lead.title ? ' · ' + esc(lead.title) : '') + '</div>' +
+          '<div class="k-next">' + esc(step.note || CHANNEL_LABEL[ch]) + '</div>' +
+        '</div>' +
+        (overdueBy > 0 ? '<div class="k-over">' + overdueBy + 'd overdue</div>' : '') +
+      '</div>'
+    ).join('');
+    return '<div style="margin-bottom:20px">' +
+      '<h3 class="section" style="margin-bottom:8px">' + CHANNEL_LABEL[ch] + ' <span class="muted">(' + items.length + ')</span></h3>' +
+      '<div class="card" style="padding:10px">' + rows + '</div>' +
+    '</div>';
+  }).join('');
+
+  $('today-groups').innerHTML = t.total
+    ? groups
+    : (currentSequence
+        ? '<div class="card" style="padding:30px; text-align:center; color:#6b7280">' +
+          'Nothing due today. Enroll leads into your sequence from any lead\'s page.</div>'
+        : '<div class="card" style="padding:30px; text-align:center; color:#6b7280">' +
+          'No sequence set up yet. Run the SQL to create one, then edit it in the Sequences tab.</div>');
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#today-groups .k-card')) {
+    const id = Number(e.target.closest('.k-card').dataset.id);
+    openDetail(id);
+  }
+});
+
+// ===================== SEQUENCE EDITOR =====================
+function renderSequenceEditor() {
+  if (!currentSequence) {
+    $('view-sequences').innerHTML = '<div class="card" style="padding:30px; text-align:center">Run the sequences SQL first.</div>';
+    return;
+  }
+  $('seq-batch').value = currentSequence.batch_size || 20;
+  const steps = currentSequence.steps || [];
+  $('seq-steps-tbody').innerHTML = steps.map((s, i) =>
+    '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td><input type="number" min="0" value="' + (s.day || 0) + '" data-i="' + i + '" data-k="day" style="width:70px; margin-bottom:0"></td>' +
+      '<td><select data-i="' + i + '" data-k="channel" style="margin-bottom:0">' +
+        ['call','email','whatsapp','linkedin'].map(ch =>
+          '<option value="' + ch + '"' + (s.channel === ch ? ' selected' : '') + '>' + CHANNEL_LABEL[ch] + '</option>'
+        ).join('') +
+      '</select></td>' +
+      '<td><input type="text" value="' + esc(s.note || '') + '" data-i="' + i + '" data-k="note" style="margin-bottom:0"></td>' +
+      '<td><button class="secondary small" data-del="' + i + '" style="color:#b91c1c">✕</button></td>' +
+    '</tr>'
+  ).join('');
+}
+
+$('seq-steps-tbody').addEventListener('click', (e) => {
+  const del = e.target.getAttribute('data-del');
+  if (del !== null) {
+    currentSequence.steps.splice(Number(del), 1);
+    renderSequenceEditor();
+  }
+});
+
+$('seq-steps-tbody').addEventListener('input', (e) => {
+  const el = e.target;
+  const i = el.getAttribute('data-i');
+  const k = el.getAttribute('data-k');
+  if (i === null) return;
+  const s = currentSequence.steps[Number(i)];
+  s[k] = k === 'day' ? Number(el.value) : el.value;
+});
+
+$('seq-add-step').addEventListener('click', () => {
+  currentSequence.steps.push({ day: 0, channel: 'email', note: '' });
+  renderSequenceEditor();
+});
+
+$('seq-save').addEventListener('click', async () => {
+  currentSequence.steps.sort((a, b) => (a.day || 0) - (b.day || 0));
+  const { error } = await db.from('sequences')
+    .update({ steps: currentSequence.steps, batch_size: currentSequence.batch_size })
+    .eq('id', currentSequence.id);
+  if (error) { toast(error.message); return; }
+  toast('Sequence saved');
+  renderSequenceEditor();
+  renderToday();
+});
+
+$('seq-save-batch').addEventListener('click', () => {
+  currentSequence.batch_size = Number($('seq-batch').value) || 20;
+  $('seq-save').click();
+});
+
+// ===================== ENROLL / PAUSE =====================
+async function setLeadSequence(lead, updates) {
+  const { error } = await db.from('leads').update(updates).eq('id', lead.id);
+  if (error) { toast(error.message); return false; }
+  Object.assign(lead, updates);
+  return true;
+}
+
+function renderLeadSequenceBox() {
+  if (!currentLead) return;
+  const box = $('d-sequence');
+  const enroll = $('d-enroll');
+  const pause = $('d-pause');
+  const un = $('d-unenroll');
+
+  if (!currentLead.sequence_id) {
+    box.innerHTML = '<span class="muted">Not enrolled in any sequence.</span>';
+    enroll.style.display = 'inline-block';
+    pause.style.display = 'none';
+    un.style.display = 'none';
+    return;
+  }
+  const steps = currentSequence?.steps || [];
+  const stepIdx = currentLead.sequence_step || 0;
+  const started = currentLead.sequence_started_at ? new Date(currentLead.sequence_started_at) : null;
+  const daysSince = started ? Math.floor((Date.now() - started.getTime()) / 86400000) : 0;
+
+  let statusText;
+  if (stepIdx >= steps.length) statusText = 'Sequence complete.';
+  else {
+    const next = steps[stepIdx];
+    const dueIn = next.day - daysSince;
+    statusText = 'On step ' + (stepIdx + 1) + '/' + steps.length +
+      ' · next: <strong>' + CHANNEL_LABEL[next.channel] + '</strong>' +
+      (next.note ? ' (' + esc(next.note) + ')' : '') +
+      (dueIn > 0 ? ' in ' + dueIn + ' day(s)' :
+       dueIn === 0 ? ' — due today' :
+       ' — <span style="color:#b91c1c">' + (-dueIn) + 'd overdue</span>');
+  }
+  box.innerHTML = (currentLead.sequence_paused ? '<span class="pill st-lost">paused</span> ' : '') + statusText;
+
+  enroll.style.display = 'none';
+  pause.style.display = 'inline-block';
+  pause.textContent = currentLead.sequence_paused ? 'Resume' : 'Pause';
+  un.style.display = 'inline-block';
+}
+
+$('d-enroll').addEventListener('click', async () => {
+  if (!currentSequence) { toast('No sequence exists — create one first'); return; }
+  const ok = await setLeadSequence(currentLead, {
+    sequence_id: currentSequence.id,
+    sequence_started_at: new Date().toISOString(),
+    sequence_step: 0,
+    sequence_paused: false
+  });
+  if (ok) { renderLeadSequenceBox(); renderToday(); toast('Enrolled — sequence starts today'); }
+});
+
+$('d-pause').addEventListener('click', async () => {
+  const paused = !currentLead.sequence_paused;
+  const ok = await setLeadSequence(currentLead, { sequence_paused: paused });
+  if (ok) { renderLeadSequenceBox(); renderToday(); toast(paused ? 'Paused' : 'Resumed'); }
+});
+
+$('d-unenroll').addEventListener('click', async () => {
+  if (!confirm('Remove from sequence? Their touch history stays.')) return;
+  const ok = await setLeadSequence(currentLead, {
+    sequence_id: null, sequence_started_at: null, sequence_step: 0, sequence_paused: false
+  });
+  if (ok) { renderLeadSequenceBox(); renderToday(); toast('Unenrolled'); }
+});
 
 // ===================== SYNC TO EXCEL =====================
 // Exports only new prospects with an email, that haven't been
