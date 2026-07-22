@@ -345,7 +345,7 @@
     <div id="today-groups"></div>
   </div>
 
-  <div id="view-pipeline" style="display:none"
+  <div id="view-pipeline" style="display:none">
     <div class="game" id="game-bar"></div>
     <div class="board" id="board"></div>
     <div class="activity">
@@ -772,24 +772,34 @@ function renderStats() {
   const partners = leads.filter(l => l.account_type === 'partner').length;
   const active = leads.length - (by.won || 0) - (by.lost || 0) - (by.not_interested || 0) - customers - partners;
   $('stats').innerHTML =
-    stat(leads.length, 'total') +
-    stat(active, 'active') +
-    stat(customers, 'customers') +
-    stat(partners, 'partners') +
+    stat(leads.length, 'total', false, 'leads') +
+    stat(active, 'active', false, 'leads') +
+    stat(customers, 'customers', false, 'customers') +
+    stat(partners, 'partners', false, 'partners') +
     stat(by.discovery || 0, 'discovery') +
     stat(by.proposal || 0, 'proposal') +
     stat(by.negotiation || 0, 'negotiation') +
     stat(by.won || 0, 'won') +
-    stat(due, 'due today', due > 0);
+    stat(due, 'due today', due > 0, 'due');
   const badge = $('due-badge');
   badge.style.display = due > 0 ? 'inline' : 'none';
   badge.textContent = due;
 }
 
-function stat(n, label, alert) {
-  return '<div class="stat"><div class="num"' + (alert ? ' style="color:#e11d48"' : '') + '>' + n +
+function stat(n, label, alert, jumpTo) {
+  const cursor = jumpTo ? ' style="cursor:pointer" data-jump="' + jumpTo + '"' : '';
+  return '<div class="stat"' + cursor + '><div class="num"' +
+    (alert ? ' style="color:#e11d48"' : '') + '>' + n +
     '</div><div class="lbl">' + label + '</div></div>';
 }
+
+// clicking any stat chip that has data-jump switches to that tab
+document.addEventListener('click', (e) => {
+  const s = e.target.closest('.stat[data-jump]');
+  if (!s) return;
+  const tab = document.querySelector('.tab[data-view="' + s.dataset.jump + '"]');
+  if (tab) tab.click();
+});
 
 // ===================== PIPELINE BOARD =====================
 function renderBoard() {
