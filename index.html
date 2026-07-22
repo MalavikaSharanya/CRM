@@ -182,15 +182,23 @@
   .hero-lbl { color: var(--muted); font-size: 13px; margin-top: 6px; }
   .hero-side { display: flex; gap: 8px; flex-wrap: wrap; }
 
+  .stats {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;
+    align-items: stretch;
+  }
   .stat {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 10px 16px; min-width: 96px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; display: flex; align-items: baseline; gap: 8px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    line-height: 1;
   }
   .stat[data-jump] { cursor: pointer; }
-  .stat[data-jump]:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--border-strong); }
-  .stat .num { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
-  .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+  .stat[data-jump]:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--border-strong); }
+  .stat .num { font-size: 18px; font-weight: 700; letter-spacing: -0.4px; }
+  .stat .num[data-zero="1"] { color: var(--muted-2); }
+  .stat .lbl {
+    font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+  }
 
   /* ===== CARDS / TABLES ===== */
   .card {
@@ -926,10 +934,13 @@ function renderStats() {
 }
 
 function stat(n, label, alert, jumpTo) {
-  const cursor = jumpTo ? ' style="cursor:pointer" data-jump="' + jumpTo + '"' : '';
-  return '<div class="stat"' + cursor + '><div class="num"' +
-    (alert ? ' style="color:#e11d48"' : '') + '>' + n +
-    '</div><div class="lbl">' + label + '</div></div>';
+  const jumpAttr = jumpTo ? ' data-jump="' + jumpTo + '"' : '';
+  const numStyle = alert ? ' style="color:var(--danger)"' : '';
+  const zeroAttr = (n === 0 || n === '0') ? ' data-zero="1"' : '';
+  return '<div class="stat"' + jumpAttr + '>' +
+    '<span class="num"' + numStyle + zeroAttr + '>' + n + '</span>' +
+    '<span class="lbl">' + label + '</span>' +
+  '</div>';
 }
 
 // clicking any stat chip that has data-jump switches to that tab
