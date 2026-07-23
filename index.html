@@ -1255,7 +1255,28 @@ $('d-bounce').addEventListener('click', async () => {
 });
 
 function renderSuggestion() {
-  $('suggest-bar').innerHTML = '<strong>Suggested next step</strong>' + esc(suggestNextStep(currentLead));
+  const suggestion = suggestNextStep(currentLead);
+  const hasFollowup = !!currentLead.next_followup;
+  // If the suggestion is about the follow-up (overdue / due / etc.), offer a one-click Mark done.
+  const showDone = hasFollowup && /OVERDUE|OVERDUE|due today|check-in|catch-up/i.test(suggestion);
+  const btn = showDone
+    ? ' <button class="secondary small" id="suggest-mark-done" style="margin-left:10px; vertical-align:middle">Mark follow-up done</button>'
+    : '';
+  $('suggest-bar').innerHTML = '<strong>Suggested next step</strong>' + esc(suggestion) + btn;
+
+  const done = document.getElementById('suggest-mark-done');
+  if (done) {
+    done.addEventListener('click', async () => {
+      const { error } = await db.from('leads').update({ next_followup: null }).eq('id', currentLead.id);
+      if (error) { toast(error.message); return; }
+      currentLead.next_followup = null;
+      $('d-followup').value = '';
+      $('d-followup-done').style.display = 'none';
+      renderStats();
+      renderSuggestion();
+      toast('Follow-up marked done — pick a new date on the left if you want another reminder');
+    });
+  }
 }
 
 async function loadTimeline() {
