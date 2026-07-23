@@ -518,10 +518,21 @@
       <button id="add-lead-btn">+ Add lead</button>
       <button class="secondary" id="export-btn">Export CSV</button>
     </div>
+    <div id="bulk-bar" style="display:none; padding:12px 16px; background:#1c1e21; color:#fff; border-radius:10px; margin-bottom:10px; align-items:center; gap:10px; flex-wrap:wrap">
+      <span id="bulk-count" style="font-weight:600"></span>
+      <button class="secondary small" id="bulk-enroll" style="background:#fff; color:#1c1e21">Enroll in sequence…</button>
+      <button class="secondary small" id="bulk-mark-customer" style="background:#fff; color:#1c1e21">Mark as customer</button>
+      <button class="secondary small" id="bulk-mark-partner" style="background:#fff; color:#1c1e21">Mark as partner</button>
+      <button class="secondary small" id="bulk-mark-not-interested" style="background:#fff; color:#1c1e21">Mark not interested</button>
+      <button class="secondary small" id="bulk-clear" style="background:transparent; color:#fff; border:1px solid #4a4a4a; margin-left:auto">Clear</button>
+    </div>
     <div class="card">
       <table>
         <thead>
-          <tr><th>Name</th><th>Company</th><th>Stage</th><th>Next step</th><th>Last contact</th><th>Follow-up</th></tr>
+          <tr>
+            <th style="width:32px"><input type="checkbox" id="bulk-select-all" style="margin:0; width:auto"></th>
+            <th>Name</th><th>Company</th><th>Stage</th><th>Next step</th><th>Last contact</th><th>Follow-up</th>
+          </tr>
         </thead>
         <tbody id="leads-tbody"></tbody>
       </table>
@@ -869,6 +880,7 @@ let selectedLogType = null;
 let csvRows = [];
 let currentView = 'today';
 let allInteractions = [];
+let selectedLeadIds = new Set();
 const INDUSTRIES = ['BFSI','IT/ITeS','Manufacturing','Retail','E-commerce','Healthcare','Pharma','Media','Education','Government','Automotive','Telecom','Logistics','SaaS','Other'];
 const INFRA_OPTIONS = ['AWS','Azure','GCP','Oracle Cloud','On-prem','Colocation','Private Cloud','Hybrid','Other'];
 let sequences = [];             // all sequences
@@ -1088,7 +1100,9 @@ function renderTable() {
   const t = todayStr();
   $('leads-tbody').innerHTML = rows.map(l => {
     const overdue = l.next_followup && l.next_followup < t && !CLOSED.includes(l.status);
-    return '<tr data-id="' + l.id + '">' +
+    const checked = selectedLeadIds.has(l.id) ? ' checked' : '';
+    return '<tr data-id="' + l.id + '"' + (selectedLeadIds.has(l.id) ? ' style="background:#eff6ff"' : '') + '>' +
+      '<td onclick="event.stopPropagation()"><input type="checkbox" class="row-check" data-id="' + l.id + '"' + checked + ' style="margin:0; width:auto"></td>' +
       '<td><strong>' + esc(l.name) + '</strong>' +
         (l.account_type === 'customer' ? ' <span class="pill st-won">customer</span>' : '') +
         (l.account_type === 'partner' ? ' <span class="pill st-proposal">partner</span>' : '') +
@@ -1164,6 +1178,98 @@ $('leads-tbody').addEventListener('click', async (e) => {
   if (tr) openDetail(Number(tr.dataset.id));
 });
 
+
+// ===================== BULK SELECTION =====================
+function updateBulkBar() {
+  const bar = $('bulk-bar');
+  const n = selectedLeadIds.size;
+  if (n === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  $('bulk-count').textContent = n + ' selected';
+}
+
+$('leads-tbody').addEventListener('change', (e) => {
+  const cb = e.target.closest('.row-check');
+  if (!cb) return;
+  const id = Number(cb.dataset.id);
+  if (cb.checked) selectedLeadIds.add(id); else selectedLeadIds.delete(id);
+  updateBulkBar();
+  const tr = cb.closest('tr');
+  if (tr) tr.style.background = cb.checked ? '#eff6ff' : '';
+});
+
+$('bulk-select-all').addEventListener('change', (e) => {
+  const on = e.target.checked;
+  document.querySelectorAll('#leads-tbody .row-check').forEach(cb => {
+    cb.checked = on;
+    const id = Number(cb.dataset.id);
+    if (on) selectedLeadIds.add(id); else selectedLeadIds.delete(id);
+    const tr = cb.closest('tr');
+    if (tr) tr.style.background = on ? '#eff6ff' : '';
+  });
+  updateBulkBar();
+});
+
+$('bulk-clear').addEventListener('click', () => {
+  selectedLeadIds.clear();
+  document.querySelectorAll('#leads-tbody .row-check').forEach(cb => cb.checked = false);
+  document.querySelectorAll('#leads-tbody tr').forEach(tr => tr.style.background = '');
+  $('bulk-select-all').checked = false;
+  updateBulkBar();
+});
+
+$('bulk-enroll').addEventListener('click', async () => {
+  if (!sequences.length) { toast('No sequences exist — create one in the Sequences tab first'); return; }
+  let seqId;
+  if (sequences.length === 1) {
+    seqId = sequences[0].id;
+  } else {
+    const menu = sequences.map((sq, i) => (i + 1) + ') ' + sq.name).join('\n');
+    const pick = prompt('Enroll ' + selectedLeadIds.size + ' lead(s) in which sequence?\n\n' + menu + '\n\nType the number:');
+    const n = Number(pick);
+    if (!n || n < 1 || n > sequences.length) return;
+    seqId = sequences[n - 1].id;
+  }
+  const ids = Array.from(selectedLeadIds);
+  const now = new Date().toISOString();
+  const { error } = await db.from('leads').update({
+    sequence_id: seqId,
+    sequence_started_at: now,
+    sequence_step: 0,
+    sequence_paused: false
+  }).in('id', ids);
+  if (error) { toast(error.message); return; }
+  ids.forEach(id => {
+    const l = leads.find(x => x.id === id);
+    if (l) Object.assign(l, { sequence_id: seqId, sequence_started_at: now, sequence_step: 0, sequence_paused: false });
+  });
+  $('bulk-clear').click();
+  renderStats();
+  renderTable();
+  renderToday();
+  toast('Enrolled ' + ids.length + ' lead(s) in the sequence');
+});
+
+async function bulkUpdate(updates, label) {
+  const ids = Array.from(selectedLeadIds);
+  if (!confirm(label + ' — apply to ' + ids.length + ' lead(s)?')) return;
+  const { error } = await db.from('leads').update(updates).in('id', ids);
+  if (error) { toast(error.message); return; }
+  ids.forEach(id => {
+    const l = leads.find(x => x.id === id);
+    if (l) Object.assign(l, updates);
+  });
+  $('bulk-clear').click();
+  renderStats();
+  renderTable();
+  renderBoard();
+  toast(label + ' — done');
+}
+
+$('bulk-mark-customer').addEventListener('click', () => bulkUpdate({ account_type: 'customer' }, 'Mark as customer'));
+$('bulk-mark-partner').addEventListener('click', () => bulkUpdate({ account_type: 'partner' }, 'Mark as partner'));
+$('bulk-mark-not-interested').addEventListener('click', () => bulkUpdate({ status: 'not_interested' }, 'Mark as not interested'));
+
 // ===================== TABS =====================
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -1180,6 +1286,10 @@ document.querySelectorAll('.tab').forEach(tab => {
     $('view-templates').style.display = v === 'templates' ? 'block' : 'none';
     $('view-analytics').style.display = v === 'analytics' ? 'block' : 'none';
     $('view-sync').style.display = v === 'sync' ? 'block' : 'none';
+    // Clear multi-select on tab switch so the bulk bar doesn't linger
+    selectedLeadIds.clear();
+    if ($('bulk-select-all')) $('bulk-select-all').checked = false;
+    updateBulkBar();
     if (v === 'pipeline') { renderBoard(); loadActivity(); loadGameData(); }
     if (v === 'leads' || v === 'due' || v === 'customers' || v === 'partners') renderTable();
     if (v === 'templates') renderTemplateList();
