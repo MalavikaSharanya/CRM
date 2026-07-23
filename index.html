@@ -552,6 +552,9 @@
       <div class="suggest-bar" id="suggest-bar"></div>
       <div class="detail-grid">
         <div class="detail-col">
+          <h3 class="section" style="margin-top:0">Recent news</h3>
+          <div id="d-news" style="margin-bottom:20px; font-size:13px"></div>
+
           <h3 class="section">Details</h3>
           <div class="field-row"><div class="k">Email</div><div id="d-email" class="v"></div></div>
           <div class="field-row"><button class="secondary small" id="d-bounce"></button></div>
@@ -1259,6 +1262,7 @@ async function openDetail(id) {
   renderBounceBtn();
   renderLeadSequenceBox();
   updateTplPreview();
+  loadCompanyNews();     // fire-and-forget so page renders instantly
   await loadTimeline();
 }
 
@@ -2034,6 +2038,66 @@ $('d-unenroll').addEventListener('click', async () => {
   });
   if (ok) { renderLeadSequenceBox(); renderToday(); toast('Unenrolled'); }
 });
+
+
+// ===================== COMPANY NEWS =====================
+const NEWS_URL = 'https://dqktnenzfrwakovomgzt.supabase.co/functions/v1/company-news';
+const newsCache = new Map();   // company -> { at, items }
+
+async function loadCompanyNews() {
+  const box = document.getElementById('d-news');
+  if (!box) return;
+  const company = (currentLead.company || currentLead.name || '').trim();
+  if (!company) { box.innerHTML = '<div class="muted">Add a company to see news.</div>'; return; }
+
+  // Cache: 15 min TTL to be polite to Google News
+  const now = Date.now();
+  const cached = newsCache.get(company);
+  if (cached && (now - cached.at) < 15 * 60 * 1000) {
+    renderNews(cached.items);
+    return;
+  }
+
+  box.innerHTML = '<div class="muted">Loading news for ' + esc(company) + '…</div>';
+  try {
+    const r = await fetch(NEWS_URL + '?q=' + encodeURIComponent(company), {
+      headers: {
+        'authorization': 'Bearer ' + SUPABASE_KEY,
+        'apikey': SUPABASE_KEY,
+        'x-sync-secret': 'k7Rt-9NqZeXvHm2Y4bPjDwFcAsGx3TuLoi5MnUp8QVBd',
+        'content-type': 'application/json'
+      }
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    newsCache.set(company, { at: now, items: j.items || [] });
+    renderNews(j.items || []);
+  } catch (e) {
+    box.innerHTML = '<div class="muted">Could not load news (' + esc(String(e.message || e)) + ').' +
+      ' <a href="https://news.google.com/search?q=' + encodeURIComponent(company) + '" target="_blank">Open Google News ↗</a></div>';
+  }
+}
+
+function renderNews(items) {
+  const box = document.getElementById('d-news');
+  if (!items.length) {
+    box.innerHTML = '<div class="muted">No recent news found. <a href="https://news.google.com/search?q=' +
+      encodeURIComponent(currentLead.company || currentLead.name) + '" target="_blank">Open Google News ↗</a></div>';
+    return;
+  }
+  const fmt = (d) => { try { return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); } catch { return ''; } };
+  box.innerHTML = items.slice(0, 5).map(it =>
+    '<div style="padding:8px 0; border-bottom:1px solid var(--border)">' +
+      '<a href="' + esc(it.link) + '" target="_blank" style="font-weight:500">' + esc(it.title) + '</a>' +
+      '<div class="muted" style="font-size:11px; margin-top:2px">' +
+        (it.source ? esc(it.source) : '') +
+        (it.pub ? ' · ' + esc(fmt(it.pub)) : '') +
+      '</div>' +
+    '</div>'
+  ).join('') +
+  '<div style="margin-top:8px"><a class="muted" style="font-size:12px" href="https://news.google.com/search?q=' +
+    encodeURIComponent(currentLead.company || currentLead.name) + '" target="_blank">See all on Google News ↗</a></div>';
+}
 
 // ===================== SYNC TO EXCEL =====================
 // Exports only new prospects with an email, that haven't been
