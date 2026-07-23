@@ -508,6 +508,8 @@
         <option>linkedin_post</option><option>linkedin</option><option>cold</option>
         <option>referral</option><option>event</option><option>whatsapp</option><option>other</option>
       </select>
+      <select id="filter-industry"><option value="">All industries</option></select>
+      <select id="filter-infra"><option value="">All infra</option></select>
       <select id="filter-bounce">
         <option value="">All emails</option>
         <option value="bounced">Bounced only</option>
@@ -555,6 +557,8 @@
           <div class="field-row"><button class="secondary small" id="d-bounce"></button></div>
           <div class="field-row"><div class="k">Phone</div><div id="d-phone" class="v"></div></div>
           <div class="field-row"><div class="k">LinkedIn</div><div id="d-linkedin" class="v"></div></div>
+          <div class="field-row"><div class="k">Industry</div><div id="d-industry" class="v"></div></div>
+          <div class="field-row"><div class="k">Infrastructure</div><div id="d-infra" class="v"></div></div>
           <div class="field-row"><div class="k">Source</div><div id="d-source" class="v"></div></div>
           <div class="field-row"><div class="k">Notes</div><div id="d-notes" class="v"></div></div>
           <h3 class="section" style="margin-top:20px">Sequence</h3>
@@ -599,7 +603,7 @@
   <div id="view-import" style="display:none">
     <div class="card import-box">
       <p><strong>Import leads from CSV</strong> (exported from Excel: File → Save As → CSV)</p>
-      <p>First row must be headers. Recognized columns: <code>name</code> (required), <code>company</code>, <code>title</code>, <code>email</code>, <code>phone</code>, <code>linkedin_url</code>, <code>source</code>, <code>notes</code>. Extra columns are ignored.</p>
+      <p>First row must be headers. Recognized columns: <code>name</code> (required), <code>company</code>, <code>title</code>, <code>email</code>, <code>phone</code>, <code>linkedin_url</code>, <code>source</code>, <code>account_type</code>, <code>industry</code>, <code>infrastructure</code> (pipe-separated: <code>AWS|Azure</code>), <code>notes</code>. Extra columns are ignored.</p>
       <input type="file" id="csv-file" accept=".csv,text/csv">
       <div id="import-preview"></div>
       <button id="import-btn" style="display:none">Import these leads</button>
@@ -622,8 +626,20 @@
   <!-- SEQUENCES VIEW -->
   <div id="view-sequences" style="display:none">
     <div class="card import-box">
-      <h3 style="font-size:16px; margin-bottom:8px">Outreach sequence</h3>
-      <p style="margin-bottom:12px">Define the touches to run for each enrolled lead. Days count from when they were enrolled. Steps auto-advance as you log matching interactions.</p>
+      <div class="page-head" style="margin-bottom:16px">
+        <div class="page-title">Sequences</div>
+        <div class="page-sub">Different cadences for different types of leads. Each lead is enrolled in one sequence.</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap">
+        <label style="font-size:14px">Editing:</label>
+        <select id="seq-picker" style="margin-bottom:0; min-width:220px"></select>
+        <button class="secondary small" id="seq-rename">Rename</button>
+        <button class="secondary small" id="seq-new">+ New sequence</button>
+        <button class="secondary small" id="seq-delete" style="color:#b91c1c">Delete</button>
+      </div>
+      <div id="seq-tpl-hint" style="display:none; padding:10px 14px; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; margin-bottom:14px; font-size:13px; color:#92400e">
+        You don't have any templates yet — the Template column will be empty until you create some in the <strong>Templates</strong> tab.
+      </div>
       <div style="display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap">
         <label style="font-size:14px">Batch size per channel per day:</label>
         <input type="number" id="seq-batch" min="1" max="100" style="width:80px; margin-bottom:0">
@@ -698,6 +714,28 @@
       <input type="text" id="n-phone" placeholder="Phone (+91...)">
     </div>
     <input type="text" id="n-linkedin" placeholder="LinkedIn URL">
+    <select id="n-industry">
+      <option value="">Industry: (unset)</option>
+      <option>BFSI</option>
+      <option>IT/ITeS</option>
+      <option>Manufacturing</option>
+      <option>Retail</option>
+      <option>E-commerce</option>
+      <option>Healthcare</option>
+      <option>Pharma</option>
+      <option>Media</option>
+      <option>Education</option>
+      <option>Government</option>
+      <option>Automotive</option>
+      <option>Telecom</option>
+      <option>Logistics</option>
+      <option>SaaS</option>
+      <option>Other</option>
+    </select>
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px">Current infrastructure (tick all that apply)</div>
+      <div id="n-infra-boxes" style="display:flex; flex-wrap:wrap; gap:6px"></div>
+    </div>
     <select id="n-type">
       <option value="prospect">Type: prospect</option>
       <option value="customer">Type: existing customer</option>
@@ -822,7 +860,12 @@ let selectedLogType = null;
 let csvRows = [];
 let currentView = 'today';
 let allInteractions = [];
-let currentSequence = null;
+const INDUSTRIES = ['BFSI','IT/ITeS','Manufacturing','Retail','E-commerce','Healthcare','Pharma','Media','Education','Government','Automotive','Telecom','Logistics','SaaS','Other'];
+const INFRA_OPTIONS = ['AWS','Azure','GCP','Oracle Cloud','On-prem','Colocation','Private Cloud','Hybrid','Other'];
+let sequences = [];             // all sequences
+let editingSequence = null;     // the one currently open in the editor
+// Helper: find the sequence a specific lead is enrolled in.
+const leadSequence = (l) => sequences.find(sq => sq.id === l.sequence_id) || null;
 
 // ===================== GAME RULES (tune freely!) =====================
 const POINTS = { call: 5, email: 3, linkedin: 3, whatsapp: 3, meeting: 10, note: 1 };
@@ -854,6 +897,10 @@ function esc(s) {
 // ===================== AUTH =====================
 async function init() {
   fillStageSelects();
+  const isel = document.getElementById('filter-industry');
+  if (isel) isel.innerHTML = '<option value="">All industries</option>' + INDUSTRIES.map(i => '<option>' + i + '</option>').join('');
+  const nsel = document.getElementById('filter-infra');
+  if (nsel) nsel.innerHTML = '<option value="">All infra</option>' + INFRA_OPTIONS.map(i => '<option>' + i + '</option>').join('');
   const { data: { session } } = await db.auth.getSession();
   if (session) showApp();
 }
@@ -878,13 +925,13 @@ $('logout-btn').addEventListener('click', async () => {
 async function showApp() {
   $('login-screen').style.display = 'none';
   $('app').classList.add('on');
-  await loadSequence();
+  await loadSequences();
+  await loadTemplates();
   await loadLeads();
   renderToday();
   renderBoard();
   loadActivity();
   loadGameData();
-  loadTemplates();
 }
 
 // ===================== DATA =====================
@@ -1010,6 +1057,8 @@ function renderTable() {
   const fsrc = $('filter-source').value;
 
   const fb = $('filter-bounce').value;
+  const findustry = $('filter-industry').value;
+  const finfra = $('filter-infra').value;
   let rows = currentView === 'due' ? dueLeads()
     : currentView === 'customers' ? leads.filter(l => l.account_type === 'customer')
     : currentView === 'partners' ? leads.filter(l => l.account_type === 'partner')
@@ -1018,7 +1067,9 @@ function renderTable() {
     (!q || (l.name + ' ' + (l.company || '') + ' ' + (l.email || '')).toLowerCase().includes(q)) &&
     (!fs || l.status === fs) &&
     (!fsrc || l.source === fsrc) &&
-    (!fb || (fb === 'bounced' ? l.email_bounced : !l.email_bounced))
+    (!fb || (fb === 'bounced' ? l.email_bounced : !l.email_bounced)) &&
+    (!findustry || l.industry === findustry) &&
+    (!finfra || (l.infrastructure && l.infrastructure.includes(finfra)))
   );
 
   if (currentView === 'due') {
@@ -1033,6 +1084,7 @@ function renderTable() {
         (l.account_type === 'customer' ? ' <span class="pill st-won">customer</span>' : '') +
         (l.account_type === 'partner' ? ' <span class="pill st-proposal">partner</span>' : '') +
         (l.email_bounced ? ' <span class="pill st-lost">email bounced</span>' : '') +
+        (l.industry ? ' <span class="pill st-contacted">' + esc(l.industry) + '</span>' : '') +
         (l.title ? '<div class="muted" style="font-size:12px">' + esc(l.title) + '</div>' : '') + '</td>' +
       '<td>' + esc(l.company) + '</td>' +
       '<td><span class="pill st-' + l.status + '">' + stageLabel(l.status) + '</span></td>' +
@@ -1045,8 +1097,10 @@ function renderTable() {
   $('empty-state').style.display = rows.length ? 'none' : 'block';
 }
 
-['search', 'filter-status', 'filter-source', 'filter-bounce'].forEach(id =>
-  $(id).addEventListener('input', renderTable));
+['search', 'filter-status', 'filter-source', 'filter-bounce', 'filter-industry', 'filter-infra'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('input', renderTable);
+});
 
 $('leads-tbody').addEventListener('click', (e) => {
   const tr = e.target.closest('tr');
@@ -1135,6 +1189,11 @@ async function openDetail(id) {
       '<button class="secondary small" id="d-li-fix">+ Add LinkedIn URL</button> ' +
       '<a href="' + searchUrl + '" target="_blank" class="muted" style="font-size:13px">find them ↗</a>';
   }
+  $('d-industry').innerHTML = currentLead.industry
+    ? '<span class="pill st-contacted">' + esc(currentLead.industry) + '</span>' : '—';
+  $('d-infra').innerHTML = (currentLead.infrastructure && currentLead.infrastructure.length)
+    ? currentLead.infrastructure.map(i => '<span class="pill st-proposal" style="margin-right:4px">' + esc(i) + '</span>').join('')
+    : '—';
   $('d-source').textContent = currentLead.source || '—';
   $('d-notes').textContent = currentLead.notes || '—';
   $('d-status').value = currentLead.status;
@@ -1335,9 +1394,10 @@ $('log-save').addEventListener('click', async () => {
   const updates = { last_contacted: new Date().toISOString() };
   if (currentLead.status === 'new' && selectedLogType !== 'note') updates.status = 'contacted';
 
-  // If this interaction matches the current sequence step, auto-advance.
-  if (currentLead.sequence_id && !currentLead.sequence_paused && currentSequence) {
-    const steps = currentSequence.steps || [];
+  // If this interaction matches the lead's sequence step, auto-advance.
+  const leadSeq = leadSequence(currentLead);
+  if (currentLead.sequence_id && !currentLead.sequence_paused && leadSeq) {
+    const steps = leadSeq.steps || [];
     const stepIdx = currentLead.sequence_step || 0;
     if (stepIdx < steps.length && steps[stepIdx].channel === selectedLogType) {
       updates.sequence_step = stepIdx + 1;
@@ -1554,26 +1614,29 @@ function renderGame() {
 }
 
 // ===================== SEQUENCES =====================
-async function loadSequence() {
-  const { data, error } = await db.from('sequences').select('*').order('id').limit(1);
-  if (error || !data || !data.length) { currentSequence = null; return; }
-  currentSequence = data[0];
+async function loadSequences() {
+  const { data, error } = await db.from('sequences').select('*').order('id');
+  if (error) { sequences = []; editingSequence = null; return; }
+  sequences = data || [];
+  editingSequence = sequences[0] || null;
 }
 
 // Which touches are due for each enrolled lead today (or overdue).
 // Returns { total, byChannel: { call: [...], email: [...], ... } }
 function todaysActions() {
   const result = { total: 0, byChannel: { call: [], email: [], whatsapp: [], linkedin: [] } };
-  if (!currentSequence) return result;
-
-  const steps = currentSequence.steps || [];
-  const batchSize = currentSequence.batch_size || 20;
   const now = Date.now();
+  // A global cap across all sequences (uses the first sequence's batch_size)
+  const batchSize = (sequences[0] && sequences[0].batch_size) || 20;
 
   for (const l of leads) {
     if (!l.sequence_id || l.sequence_paused) continue;
     if (l.status === 'won' || l.status === 'lost' || l.status === 'not_interested') continue;
     if (l.email_bounced) continue;
+
+    const seq = leadSequence(l);
+    if (!seq) continue;
+    const steps = seq.steps || [];
 
     const started = l.sequence_started_at ? new Date(l.sequence_started_at).getTime() : now;
     const daysSince = Math.floor((now - started) / 86400000);
@@ -1588,9 +1651,7 @@ function todaysActions() {
     }
   }
 
-  // Apply batch cap per channel and count total
   for (const ch of Object.keys(result.byChannel)) {
-    // Prioritise most overdue first, then oldest enrolled
     result.byChannel[ch].sort((a, b) => b.overdueBy - a.overdueBy);
     result.byChannel[ch] = result.byChannel[ch].slice(0, batchSize);
     result.total += result.byChannel[ch].length;
@@ -1645,11 +1706,11 @@ function renderToday() {
 
   $('today-groups').innerHTML = t.total
     ? groups
-    : (currentSequence
+    : (sequences.length
         ? '<div class="empty"><span class="emoji">✓</span><h3>All caught up</h3>' +
-          '<p>Nothing due today. Enroll a few more leads into your sequence to keep the pipeline flowing.</p></div>'
-        : '<div class="empty"><span class="emoji">◇</span><h3>No sequence yet</h3>' +
-          '<p>Run the sequences SQL, then open the Sequences tab to define your outreach cadence.</p></div>');
+          '<p>Nothing due today. Enroll a few more leads into your sequences to keep the pipeline flowing.</p></div>'
+        : '<div class="empty"><span class="emoji">◇</span><h3>No sequences yet</h3>' +
+          '<p>Head to the Sequences tab and create your first outreach cadence.</p></div>');
 }
 
 document.addEventListener('click', async (e) => {
@@ -1675,12 +1736,25 @@ document.addEventListener('click', async (e) => {
 
 // ===================== SEQUENCE EDITOR =====================
 function renderSequenceEditor() {
-  if (!currentSequence) {
-    $('view-sequences').innerHTML = '<div class="card" style="padding:30px; text-align:center">Run the sequences SQL first.</div>';
+  // Populate the sequence picker
+  const picker = $('seq-picker');
+  if (picker) {
+    picker.innerHTML = sequences.length
+      ? sequences.map(sq => '<option value="' + sq.id + '"' + (editingSequence && sq.id === editingSequence.id ? ' selected' : '') + '>' + esc(sq.name) + '</option>').join('')
+      : '<option value="">— no sequences yet —</option>';
+  }
+
+  // Hint if she has no templates yet (so the Template column will be empty)
+  const hint = $('seq-tpl-hint');
+  if (hint) hint.style.display = templates.length === 0 ? 'block' : 'none';
+
+  if (!editingSequence) {
+    $('seq-steps-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#6b7280">Click + New sequence to create your first one.</td></tr>';
+    $('seq-batch').value = 20;
     return;
   }
-  $('seq-batch').value = currentSequence.batch_size || 20;
-  const steps = currentSequence.steps || [];
+  $('seq-batch').value = editingSequence.batch_size || 20;
+  const steps = editingSequence.steps || [];
   $('seq-steps-tbody').innerHTML = steps.map((s, i) => {
     // Templates whose channel matches this step's channel
     const matching = templates.filter(t => t.channel === s.channel);
@@ -1707,8 +1781,8 @@ function renderSequenceEditor() {
 
 $('seq-steps-tbody').addEventListener('click', (e) => {
   const del = e.target.getAttribute('data-del');
-  if (del !== null) {
-    currentSequence.steps.splice(Number(del), 1);
+  if (del !== null && editingSequence) {
+    editingSequence.steps.splice(Number(del), 1);
     renderSequenceEditor();
   }
 });
@@ -1717,8 +1791,8 @@ $('seq-steps-tbody').addEventListener('input', (e) => {
   const el = e.target;
   const i = el.getAttribute('data-i');
   const k = el.getAttribute('data-k');
-  if (i === null) return;
-  const s = currentSequence.steps[Number(i)];
+  if (i === null || !editingSequence) return;
+  const s = editingSequence.steps[Number(i)];
   if (k === 'day') s.day = Number(el.value);
   else if (k === 'template_id') s.template_id = el.value ? Number(el.value) : null;
   else s[k] = el.value;
@@ -1734,15 +1808,17 @@ $('seq-steps-tbody').addEventListener('change', (e) => {
 });
 
 $('seq-add-step').addEventListener('click', () => {
-  currentSequence.steps.push({ day: 0, channel: 'email', note: '' });
+  if (!editingSequence) { toast('Create a sequence first'); return; }
+  editingSequence.steps.push({ day: 0, channel: 'email', note: '', template_id: null });
   renderSequenceEditor();
 });
 
 $('seq-save').addEventListener('click', async () => {
-  currentSequence.steps.sort((a, b) => (a.day || 0) - (b.day || 0));
+  if (!editingSequence) return;
+  editingSequence.steps.sort((a, b) => (a.day || 0) - (b.day || 0));
   const { error } = await db.from('sequences')
-    .update({ steps: currentSequence.steps, batch_size: currentSequence.batch_size })
-    .eq('id', currentSequence.id);
+    .update({ steps: editingSequence.steps, batch_size: editingSequence.batch_size, name: editingSequence.name })
+    .eq('id', editingSequence.id);
   if (error) { toast(error.message); return; }
   toast('Sequence saved');
   renderSequenceEditor();
@@ -1750,8 +1826,56 @@ $('seq-save').addEventListener('click', async () => {
 });
 
 $('seq-save-batch').addEventListener('click', () => {
-  currentSequence.batch_size = Number($('seq-batch').value) || 20;
+  if (!editingSequence) return;
+  editingSequence.batch_size = Number($('seq-batch').value) || 20;
   $('seq-save').click();
+});
+
+// Sequence picker + new/rename/delete
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'seq-picker') {
+    const id = Number(e.target.value);
+    editingSequence = sequences.find(sq => sq.id === id) || null;
+    renderSequenceEditor();
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  if (e.target.id === 'seq-new') {
+    const name = prompt('Name this sequence:', 'New sequence');
+    if (!name) return;
+    const { data, error } = await db.from('sequences')
+      .insert({ name: name, steps: [], batch_size: 20 })
+      .select().single();
+    if (error) { toast(error.message); return; }
+    sequences.push(data);
+    editingSequence = data;
+    renderSequenceEditor();
+    toast('Sequence created');
+  }
+  if (e.target.id === 'seq-rename' && editingSequence) {
+    const name = prompt('Rename:', editingSequence.name);
+    if (!name) return;
+    editingSequence.name = name;
+    await db.from('sequences').update({ name }).eq('id', editingSequence.id);
+    renderSequenceEditor();
+    toast('Renamed');
+  }
+  if (e.target.id === 'seq-delete' && editingSequence) {
+    const enrolled = leads.filter(l => l.sequence_id === editingSequence.id).length;
+    if (enrolled > 0) {
+      if (!confirm(enrolled + ' lead(s) are enrolled in this sequence. Deleting will unenroll them. Continue?')) return;
+      await db.from('leads').update({ sequence_id: null, sequence_started_at: null, sequence_step: 0 }).eq('sequence_id', editingSequence.id);
+      leads.forEach(l => { if (l.sequence_id === editingSequence.id) { l.sequence_id = null; l.sequence_started_at = null; l.sequence_step = 0; } });
+    } else if (!confirm('Delete sequence "' + editingSequence.name + '"?')) return;
+    const idToDel = editingSequence.id;
+    await db.from('sequences').delete().eq('id', idToDel);
+    sequences = sequences.filter(sq => sq.id !== idToDel);
+    editingSequence = sequences[0] || null;
+    renderSequenceEditor();
+    renderToday();
+    toast('Deleted');
+  }
 });
 
 // ===================== ENROLL / PAUSE =====================
@@ -1776,17 +1900,19 @@ function renderLeadSequenceBox() {
     un.style.display = 'none';
     return;
   }
-  const steps = currentSequence?.steps || [];
+  const seq = leadSequence(currentLead);
+  const steps = seq?.steps || [];
   const stepIdx = currentLead.sequence_step || 0;
   const started = currentLead.sequence_started_at ? new Date(currentLead.sequence_started_at) : null;
   const daysSince = started ? Math.floor((Date.now() - started.getTime()) / 86400000) : 0;
 
   let statusText;
-  if (stepIdx >= steps.length) statusText = 'Sequence complete.';
+  if (!seq) statusText = 'Sequence missing (may have been deleted).';
+  else if (stepIdx >= steps.length) statusText = 'Sequence "' + esc(seq.name) + '" — complete.';
   else {
     const next = steps[stepIdx];
     const dueIn = next.day - daysSince;
-    statusText = 'On step ' + (stepIdx + 1) + '/' + steps.length +
+    statusText = 'On <strong>' + esc(seq.name) + '</strong>, step ' + (stepIdx + 1) + '/' + steps.length +
       ' · next: <strong>' + CHANNEL_LABEL[next.channel] + '</strong>' +
       (next.note ? ' (' + esc(next.note) + ')' : '') +
       (dueIn > 0 ? ' in ' + dueIn + ' day(s)' :
@@ -1802,9 +1928,19 @@ function renderLeadSequenceBox() {
 }
 
 $('d-enroll').addEventListener('click', async () => {
-  if (!currentSequence) { toast('No sequence exists — create one first'); return; }
+  if (!sequences.length) { toast('No sequences exist — create one in the Sequences tab first'); return; }
+  let seqId;
+  if (sequences.length === 1) {
+    seqId = sequences[0].id;
+  } else {
+    const menu = sequences.map((sq, i) => (i + 1) + ') ' + sq.name).join('\n');
+    const pick = prompt('Enroll in which sequence?\n\n' + menu + '\n\nType the number:');
+    const n = Number(pick);
+    if (!n || n < 1 || n > sequences.length) return;
+    seqId = sequences[n - 1].id;
+  }
   const ok = await setLeadSequence(currentLead, {
-    sequence_id: currentSequence.id,
+    sequence_id: seqId,
     sequence_started_at: new Date().toISOString(),
     sequence_step: 0,
     sequence_paused: false
@@ -1998,13 +2134,32 @@ function confetti() {
 // creates a new row (null) or updates an existing one.
 let editingLeadId = null;
 
+// Helper: render the infrastructure checkboxes with a set of currently-selected values
+function renderInfraBoxes(selected) {
+  selected = selected || [];
+  $('n-infra-boxes').innerHTML = INFRA_OPTIONS.map(o =>
+    '<label style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border:1px solid var(--border); border-radius:16px; font-size:13px; cursor:pointer; background:' +
+      (selected.includes(o) ? 'var(--text); color:#fff; border-color:var(--text)' : 'var(--surface)') + '">' +
+      '<input type="checkbox" value="' + o + '"' + (selected.includes(o) ? ' checked' : '') + ' style="margin:0; width:auto"> ' + o +
+    '</label>'
+  ).join('');
+}
+function readInfraSelection() {
+  return Array.from(document.querySelectorAll('#n-infra-boxes input[type="checkbox"]'))
+    .filter(cb => cb.checked).map(cb => cb.value);
+}
+// Toggle chip visual when clicking a checkbox
+document.addEventListener('change', (e) => {
+  if (e.target.matches('#n-infra-boxes input[type="checkbox"]')) renderInfraBoxes(readInfraSelection());
+});
+
 $('add-lead-btn').addEventListener('click', () => {
   editingLeadId = null;
   $('modal-title').textContent = 'Add lead';
   ['n-name','n-company','n-title','n-email','n-phone','n-linkedin','n-notes'].forEach(id => $(id).value = '');
   $('n-source').value = 'other';
-  // context-aware default: adding from the Customers/Partners tab
-  // pre-selects that type
+  $('n-industry').value = '';
+  renderInfraBoxes([]);
   $('n-type').value = currentView === 'customers' ? 'customer'
     : currentView === 'partners' ? 'partner' : 'prospect';
   $('add-overlay').classList.add('open');
@@ -2022,6 +2177,8 @@ $('edit-lead-btn').addEventListener('click', () => {
   $('n-linkedin').value = currentLead.linkedin_url || '';
   $('n-source').value = currentLead.source || 'other';
   $('n-type').value = currentLead.account_type || 'prospect';
+  $('n-industry').value = currentLead.industry || '';
+  renderInfraBoxes(currentLead.infrastructure || []);
   $('n-notes').value = currentLead.notes || '';
   $('add-overlay').classList.add('open');
 });
@@ -2044,6 +2201,8 @@ $('add-save').addEventListener('click', async () => {
     linkedin_url: $('n-linkedin').value.trim() || null,
     source: $('n-source').value,
     account_type: $('n-type').value,
+    industry: $('n-industry').value || null,
+    infrastructure: readInfraSelection(),
     notes: $('n-notes').value.trim() || null
   };
 
@@ -2109,13 +2268,16 @@ $('csv-file').addEventListener('change', async (e) => {
   const rows = parseCSV(text);
   if (rows.length < 2) { $('import-preview').textContent = 'Could not find data rows.'; return; }
 
-  const known = ['name', 'company', 'title', 'email', 'phone', 'linkedin_url', 'source', 'account_type', 'notes'];
+  const known = ['name', 'company', 'title', 'email', 'phone', 'linkedin_url', 'source', 'account_type', 'industry', 'infrastructure', 'notes'];
   const headers = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
 
   csvRows = rows.slice(1).map(r => {
     const obj = {};
     headers.forEach((h, i) => { if (known.includes(h) && r[i] && r[i].trim()) obj[h] = r[i].trim(); });
     if (obj.email) obj.email = obj.email.toLowerCase();
+    if (obj.infrastructure) {
+      obj.infrastructure = obj.infrastructure.split(/[|;,]/).map(x => x.trim()).filter(Boolean);
+    }
     return obj;
   }).filter(o => o.name);
 
@@ -2129,29 +2291,65 @@ $('csv-file').addEventListener('change', async (e) => {
 
 $('import-btn').addEventListener('click', async () => {
   $('import-btn').disabled = true;
-  $('import-btn').textContent = 'Importing...';
+  $('import-btn').textContent = 'Checking for duplicates...';
 
+  // 1. Fetch existing linkedin_urls and emails so we can dedupe up-front.
+  //    (Postgres unique constraints would otherwise fail the whole chunk.)
+  const { data: existing, error: exErr } = await db.from('leads')
+    .select('email, linkedin_url');
+  if (exErr) {
+    toast('Error checking existing leads: ' + exErr.message);
+    $('import-btn').disabled = false;
+    $('import-btn').textContent = 'Import these leads';
+    return;
+  }
+  const emailSet = new Set(existing.filter(l => l.email).map(l => l.email.toLowerCase().trim()));
+  const liSet    = new Set(existing.filter(l => l.linkedin_url).map(l => l.linkedin_url.trim()));
+
+  // 2. Split CSV rows into new vs. duplicates.
+  const toInsert = [];
+  let skipped = 0;
+  const seenInBatch = { email: new Set(), li: new Set() };  // dedupe within the file too
+  for (const r of csvRows) {
+    const em = (r.email || '').toLowerCase().trim();
+    const li = (r.linkedin_url || '').trim();
+    if ((em && emailSet.has(em)) || (li && liSet.has(li))
+        || (em && seenInBatch.email.has(em)) || (li && seenInBatch.li.has(li))) {
+      skipped++;
+      continue;
+    }
+    if (em) seenInBatch.email.add(em);
+    if (li) seenInBatch.li.add(li);
+    toInsert.push(r);
+  }
+
+  // 3. Insert only the new ones, in safe chunks.
+  $('import-btn').textContent = 'Importing ' + toInsert.length + '...';
   let inserted = 0;
-  for (let i = 0; i < csvRows.length; i += 200) {
-    const chunk = csvRows.slice(i, i + 200);
+  for (let i = 0; i < toInsert.length; i += 200) {
+    const chunk = toInsert.slice(i, i + 200);
     const { error } = await db.from('leads').insert(chunk);
-    if (error) { toast('Stopped at row ' + i + ': ' + error.message); break; }
+    if (error) {
+      toast('Stopped at row ' + i + ': ' + error.message);
+      $('import-preview').innerHTML +=
+        '<br><strong>Imported ' + inserted + ', skipped ' + skipped + ' (duplicates). Stopped: ' + error.message + '</strong>';
+      $('import-btn').disabled = false;
+      $('import-btn').textContent = 'Import these leads';
+      await loadLeads();
+      renderBoard();
+      return;
+    }
     inserted += chunk.length;
   }
 
-  if (inserted === csvRows.length && inserted > 0) {
-    // success: the button goes numb until a NEW file is chosen,
-    // so the same file can't be imported twice by accident
-    $('import-btn').disabled = true;
-    $('import-btn').textContent = 'Imported ✓ — choose a new file to import more';
-    csvRows = [];
-  } else {
-    // partial/failed import: allow a retry
-    $('import-btn').disabled = false;
-    $('import-btn').textContent = 'Import these leads';
-  }
-  $('import-preview').innerHTML += '<br><strong>Imported ' + inserted + ' leads ✓</strong>';
-  toast('Imported ' + inserted + ' leads');
+  // 4. Reset state — one-shot button so we don't double-import.
+  csvRows = [];
+  $('import-btn').disabled = true;
+  $('import-btn').textContent = 'Imported ✓ — choose a new file to import more';
+  $('import-preview').innerHTML =
+    '<strong>Imported ' + inserted + ' new lead(s)</strong>' +
+    (skipped ? ' &nbsp;·&nbsp; <span style="color:#6b7280">Skipped ' + skipped + ' duplicate(s) (email or LinkedIn URL already existed)</span>' : '');
+  toast(inserted + ' imported' + (skipped ? ', ' + skipped + ' skipped' : ''));
   await loadLeads();
   renderBoard();
 });
@@ -2167,8 +2365,12 @@ $('export-btn').addEventListener('click', () => {
     (!fsrc || l.source === fsrc)
   );
 
-  const cols = ['name','company','title','email','phone','linkedin_url','source','account_type','status','email_bounced','next_step','next_followup','last_contacted','notes'];
-  const csvEsc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const cols = ['name','company','title','email','phone','linkedin_url','source','account_type','industry','infrastructure','status','email_bounced','next_step','next_followup','last_contacted','notes'];
+  const csvEsc = (v) => {
+    // Arrays (infrastructure) become pipe-joined so re-import works
+    const s = Array.isArray(v) ? v.join('|') : String(v == null ? '' : v);
+    return '"' + s.replace(/"/g, '""') + '"';
+  };
   const csv = cols.join(',') + '\n' +
     rows.map(l => cols.map(c => csvEsc(l[c])).join(',')).join('\n');
 
