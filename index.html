@@ -625,6 +625,8 @@
       <p><strong>Import leads from CSV</strong> (exported from Excel: File → Save As → CSV)</p>
       <p>First row must be headers. Recognized columns: <code>name</code> (required), <code>company</code>, <code>title</code>, <code>email</code>, <code>phone</code>, <code>linkedin_url</code>, <code>source</code>, <code>account_type</code>, <code>industry</code>, <code>infrastructure</code> (pipe-separated: <code>AWS|Azure</code>), <code>notes</code>. Extra columns are ignored.</p>
       <input type="file" id="csv-file" accept=".csv,text/csv">
+      <div style="margin:14px 0 6px; font-size:12px; color:var(--muted-2); text-transform:uppercase; letter-spacing:0.5px">— or paste CSV rows —</div>
+      <textarea id="csv-paste" placeholder="Paste CSV rows here (first line must be headers). Example:&#10;name,company,title,email,phone,industry,notes&#10;Sameer Nigam,PhonePe,Founder,sameer@phonepe.com,+91 90000 00000,BFSI,&quot;Warm intro from Anand&quot;" style="min-height:120px; font-family:ui-monospace, Menlo, Consolas, monospace; font-size:13px"></textarea>
       <div id="import-preview"></div>
       <button id="import-btn" style="display:none">Import these leads</button>
     </div>
@@ -2595,19 +2597,19 @@ function parseCSV(text) {
   return rows;
 }
 
-$('csv-file').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  // picking a new file wakes the button back up
+// Shared: given a CSV string, parse + preview + arm the import button
+function processCsvText(text) {
   $('import-btn').disabled = false;
   $('import-btn').textContent = 'Import these leads';
-  const text = await file.text();
   const rows = parseCSV(text);
-  if (rows.length < 2) { $('import-preview').textContent = 'Could not find data rows.'; return; }
-
+  if (rows.length < 2) {
+    $('import-preview').textContent = 'Need at least a header row and one data row.';
+    $('import-btn').style.display = 'none';
+    csvRows = [];
+    return;
+  }
   const known = ['name', 'company', 'title', 'email', 'phone', 'linkedin_url', 'source', 'account_type', 'industry', 'infrastructure', 'notes'];
   const headers = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
-
   csvRows = rows.slice(1).map(r => {
     const obj = {};
     headers.forEach((h, i) => { if (known.includes(h) && r[i] && r[i].trim()) obj[h] = r[i].trim(); });
@@ -2617,13 +2619,38 @@ $('csv-file').addEventListener('change', async (e) => {
     }
     return obj;
   }).filter(o => o.name);
-
   const skipped = rows.length - 1 - csvRows.length;
+  const matched = headers.filter(h => known.includes(h));
+  const unknown = headers.filter(h => !known.includes(h));
   $('import-preview').innerHTML =
-    '<strong>' + csvRows.length + '</strong> leads ready to import' +
+    '<strong>' + csvRows.length + '</strong> lead(s) ready to import' +
     (skipped > 0 ? ' (' + skipped + ' rows skipped — missing name)' : '') +
-    '.<br>Matched columns: ' + headers.filter(h => known.includes(h)).join(', ');
+    '.<br>Matched columns: ' + matched.join(', ') +
+    (unknown.length ? '<br><span class="muted">Ignored: ' + unknown.join(', ') + '</span>' : '');
   $('import-btn').style.display = csvRows.length ? 'inline-block' : 'none';
+}
+
+// Live parse as you paste — same preview appears
+$('csv-paste').addEventListener('input', (e) => {
+  const text = e.target.value.trim();
+  if (!text) {
+    $('import-preview').innerHTML = '';
+    $('import-btn').style.display = 'none';
+    csvRows = [];
+    return;
+  }
+  processCsvText(text);
+});
+
+$('csv-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  // Clear the paste box so we don't get confused about which source is in play
+  $('csv-paste').value = '';
+  $('import-btn').disabled = false;
+  $('import-btn').textContent = 'Import these leads';
+  const text = await file.text();
+  processCsvText(text);
 });
 
 $('import-btn').addEventListener('click', async () => {
@@ -2681,8 +2708,10 @@ $('import-btn').addEventListener('click', async () => {
 
   // 4. Reset state — one-shot button so we don't double-import.
   csvRows = [];
+  $('csv-paste').value = '';
+  $('csv-file').value = '';
   $('import-btn').disabled = true;
-  $('import-btn').textContent = 'Imported ✓ — choose a new file to import more';
+  $('import-btn').textContent = 'Imported ✓ — paste or choose a new file to import more';
   $('import-preview').innerHTML =
     '<strong>Imported ' + inserted + ' new lead(s)</strong>' +
     (skipped ? ' &nbsp;·&nbsp; <span style="color:#6b7280">Skipped ' + skipped + ' duplicate(s) (email or LinkedIn URL already existed)</span>' : '');
