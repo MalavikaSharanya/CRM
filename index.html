@@ -1107,19 +1107,51 @@ function renderTable() {
   if (el) el.addEventListener('input', renderTable);
 });
 
+// Shared helper: clears the follow-up, logs a note into interactions,
+// stamps last_contacted, refreshes UI wherever we are.
+async function markFollowupDone(leadId, previousDate) {
+  const now = new Date().toISOString();
+  const dateStr = previousDate ? previousDate : (new Date().toISOString().slice(0, 10));
+  const noteText = 'Follow-up marked done (was due ' + dateStr + ')';
+
+  const upd = await db.from('leads')
+    .update({ next_followup: null, last_contacted: now })
+    .eq('id', leadId);
+  if (upd.error) { toast(upd.error.message); return false; }
+
+  await db.from('interactions').insert({
+    lead_id: leadId,
+    type: 'note',
+    notes: noteText
+  });
+
+  const lead = leads.find(l => l.id === leadId);
+  if (lead) { lead.next_followup = null; lead.last_contacted = now; }
+
+  if (currentLead && currentLead.id === leadId) {
+    currentLead.next_followup = null;
+    currentLead.last_contacted = now;
+    document.getElementById('d-followup').value = '';
+    const btn = document.getElementById('d-followup-done');
+    if (btn) btn.style.display = 'none';
+    renderSuggestion();
+    await loadTimeline();
+  }
+  renderStats();
+  renderTable();
+  loadActivity();
+  return true;
+}
+
 $('leads-tbody').addEventListener('click', async (e) => {
   // Mark-done takes precedence over row-click
   const done = e.target.closest('.mark-done-btn');
   if (done) {
     e.stopPropagation();
     const id = Number(done.dataset.id);
-    const { error } = await db.from('leads').update({ next_followup: null }).eq('id', id);
-    if (error) { toast(error.message); return; }
     const lead = leads.find(l => l.id === id);
-    if (lead) lead.next_followup = null;
-    renderStats();
-    renderTable();
-    toast('Follow-up cleared — set a new date on the lead if needed');
+    const ok = await markFollowupDone(id, lead && lead.next_followup);
+    if (ok) toast('Follow-up done, logged to timeline. Set a new date on the lead if needed.');
     return;
   }
   const tr = e.target.closest('tr');
@@ -1267,14 +1299,8 @@ function renderSuggestion() {
   const done = document.getElementById('suggest-mark-done');
   if (done) {
     done.addEventListener('click', async () => {
-      const { error } = await db.from('leads').update({ next_followup: null }).eq('id', currentLead.id);
-      if (error) { toast(error.message); return; }
-      currentLead.next_followup = null;
-      $('d-followup').value = '';
-      $('d-followup-done').style.display = 'none';
-      renderStats();
-      renderSuggestion();
-      toast('Follow-up marked done — pick a new date on the left if you want another reminder');
+      const ok = await markFollowupDone(currentLead.id, currentLead.next_followup);
+      if (ok) toast('Follow-up marked done — logged to timeline.');
     });
   }
 }
@@ -1353,14 +1379,8 @@ $('d-followup').addEventListener('change', async () => {
 });
 
 $('d-followup-done').addEventListener('click', async () => {
-  const { error } = await db.from('leads').update({ next_followup: null }).eq('id', currentLead.id);
-  if (error) { toast(error.message); return; }
-  currentLead.next_followup = null;
-  $('d-followup').value = '';
-  $('d-followup-done').style.display = 'none';
-  renderStats();
-  renderSuggestion();
-  toast('Follow-up done — pick a new date if you want to be reminded again');
+  const ok = await markFollowupDone(currentLead.id, currentLead.next_followup);
+  if (ok) toast('Follow-up done — logged. Pick a new date if you want to be reminded again.');
 });
 
 $('d-nextstep').addEventListener('change', async () => {
