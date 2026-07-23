@@ -572,7 +572,10 @@
           <h3 class="section" style="margin-top:20px">Your planned next step</h3>
           <input type="text" id="d-nextstep" placeholder="e.g. Send proposal draft by Thursday">
           <h3 class="section" style="margin-top:8px">Next follow-up date</h3>
-          <input type="date" id="d-followup" style="width:auto">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <input type="date" id="d-followup" style="width:auto; margin-bottom:0">
+            <button class="secondary small" id="d-followup-done" style="display:none">Mark done</button>
+          </div>
         </div>
         <div class="detail-col">
           <h3 class="section">Outreach templates</h3>
@@ -1090,7 +1093,9 @@ function renderTable() {
       '<td><span class="pill st-' + l.status + '">' + stageLabel(l.status) + '</span></td>' +
       '<td class="muted" style="max-width:220px">' + esc((l.next_step || suggestNextStep(l))).slice(0, 60) + '</td>' +
       '<td class="muted">' + (l.last_contacted ? l.last_contacted.slice(0, 10) : '—') + '</td>' +
-      '<td class="' + (overdue ? 'overdue' : 'muted') + '">' + (l.next_followup || '—') + '</td>' +
+      '<td class="' + (overdue ? 'overdue' : 'muted') + '">' + (l.next_followup || '—') +
+        (currentView === 'due' && l.next_followup ? ' <button class="secondary small mark-done-btn" data-id="' + l.id + '" style="margin-left:6px">Mark done</button>' : '') +
+      '</td>' +
     '</tr>';
   }).join('');
 
@@ -1102,7 +1107,21 @@ function renderTable() {
   if (el) el.addEventListener('input', renderTable);
 });
 
-$('leads-tbody').addEventListener('click', (e) => {
+$('leads-tbody').addEventListener('click', async (e) => {
+  // Mark-done takes precedence over row-click
+  const done = e.target.closest('.mark-done-btn');
+  if (done) {
+    e.stopPropagation();
+    const id = Number(done.dataset.id);
+    const { error } = await db.from('leads').update({ next_followup: null }).eq('id', id);
+    if (error) { toast(error.message); return; }
+    const lead = leads.find(l => l.id === id);
+    if (lead) lead.next_followup = null;
+    renderStats();
+    renderTable();
+    toast('Follow-up cleared — set a new date on the lead if needed');
+    return;
+  }
   const tr = e.target.closest('tr');
   if (tr) openDetail(Number(tr.dataset.id));
 });
@@ -1198,6 +1217,7 @@ async function openDetail(id) {
   $('d-notes').textContent = currentLead.notes || '—';
   $('d-status').value = currentLead.status;
   $('d-followup').value = currentLead.next_followup || '';
+  $('d-followup-done').style.display = currentLead.next_followup ? 'inline-block' : 'none';
   $('d-nextstep').value = currentLead.next_step || '';
   $('log-notes').value = '';
   selectedLogType = null;
@@ -1305,9 +1325,21 @@ $('d-followup').addEventListener('change', async () => {
   const { error } = await db.from('leads').update({ next_followup: v }).eq('id', currentLead.id);
   if (error) { toast(error.message); return; }
   currentLead.next_followup = v;
+  $('d-followup-done').style.display = v ? 'inline-block' : 'none';
   renderStats();
   renderSuggestion();
   toast('Follow-up set');
+});
+
+$('d-followup-done').addEventListener('click', async () => {
+  const { error } = await db.from('leads').update({ next_followup: null }).eq('id', currentLead.id);
+  if (error) { toast(error.message); return; }
+  currentLead.next_followup = null;
+  $('d-followup').value = '';
+  $('d-followup-done').style.display = 'none';
+  renderStats();
+  renderSuggestion();
+  toast('Follow-up done — pick a new date if you want to be reminded again');
 });
 
 $('d-nextstep').addEventListener('change', async () => {
