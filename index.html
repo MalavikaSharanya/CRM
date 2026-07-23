@@ -536,7 +536,10 @@
   <div id="view-detail" style="display:none">
     <div class="controls">
       <button class="secondary" id="back-btn">← Back</button>
-      <button class="secondary" id="edit-lead-btn">Edit lead</button>
+      <button class="secondary" id="prev-lead-btn">‹ Prev</button>
+      <button class="secondary" id="next-lead-btn">Next ›</button>
+      <span id="lead-position" class="muted" style="font-size:13px; margin-left:6px"></span>
+      <button class="secondary" id="edit-lead-btn" style="margin-left:auto">Edit lead</button>
       <button class="secondary" id="delete-lead-btn" style="color:#b91c1c">Delete lead</button>
     </div>
     <div class="card">
@@ -1188,6 +1191,92 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 
 // ===================== DETAIL =====================
+
+// Given the current view + filters, produce the ordered list of visible lead IDs.
+function visibleLeadIds() {
+  const q = ($('search') && $('search').value || '').toLowerCase();
+  const fs = ($('filter-status') && $('filter-status').value) || '';
+  const fsrc = ($('filter-source') && $('filter-source').value) || '';
+  const fb = ($('filter-bounce') && $('filter-bounce').value) || '';
+  const findustry = ($('filter-industry') && $('filter-industry').value) || '';
+  const finfra = ($('filter-infra') && $('filter-infra').value) || '';
+
+  let rows;
+  if (currentView === 'due') rows = dueLeads();
+  else if (currentView === 'customers') rows = leads.filter(l => l.account_type === 'customer');
+  else if (currentView === 'partners') rows = leads.filter(l => l.account_type === 'partner');
+  else if (currentView === 'today') {
+    // Today's action leads in the same order the tab renders
+    const t = todaysActions();
+    const seen = new Set();
+    const ids = [];
+    ['call','email','whatsapp','linkedin'].forEach(ch => {
+      (t.byChannel[ch] || []).forEach(({ lead }) => {
+        if (!seen.has(lead.id)) { seen.add(lead.id); ids.push(lead.id); }
+      });
+    });
+    return ids;
+  }
+  else if (currentView === 'pipeline') {
+    // Board order: stage-by-stage
+    const ids = [];
+    STAGES.forEach(s => {
+      leads.filter(l => l.status === s.value && l.account_type !== 'customer' && l.account_type !== 'partner')
+        .forEach(l => ids.push(l.id));
+    });
+    return ids;
+  }
+  else rows = leads;
+
+  rows = rows.filter(l =>
+    (!q || (l.name + ' ' + (l.company || '') + ' ' + (l.email || '')).toLowerCase().includes(q)) &&
+    (!fs || l.status === fs) &&
+    (!fsrc || l.source === fsrc) &&
+    (!fb || (fb === 'bounced' ? l.email_bounced : !l.email_bounced)) &&
+    (!findustry || l.industry === findustry) &&
+    (!finfra || (l.infrastructure && l.infrastructure.includes(finfra)))
+  );
+  return rows.map(l => l.id);
+}
+
+function updatePrevNextButtons() {
+  if (!currentLead) return;
+  const ids = visibleLeadIds();
+  const idx = ids.indexOf(currentLead.id);
+  const pos = $('lead-position');
+  const prev = $('prev-lead-btn');
+  const next = $('next-lead-btn');
+  if (idx === -1) {
+    if (pos) pos.textContent = '';
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    return;
+  }
+  if (pos) pos.textContent = (idx + 1) + ' of ' + ids.length;
+  if (prev) prev.disabled = idx === 0;
+  if (next) next.disabled = idx >= ids.length - 1;
+}
+
+$('prev-lead-btn').addEventListener('click', () => {
+  const ids = visibleLeadIds();
+  const idx = ids.indexOf(currentLead && currentLead.id);
+  if (idx > 0) openDetail(ids[idx - 1]);
+});
+$('next-lead-btn').addEventListener('click', () => {
+  const ids = visibleLeadIds();
+  const idx = ids.indexOf(currentLead && currentLead.id);
+  if (idx !== -1 && idx < ids.length - 1) openDetail(ids[idx + 1]);
+});
+
+// Arrow keys shortcut when on the detail page (and not typing in a field)
+document.addEventListener('keydown', (e) => {
+  if ($('view-detail').style.display !== 'block') return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); $('next-lead-btn').click(); }
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); $('prev-lead-btn').click(); }
+});
+
 async function openDetail(id) {
   currentLead = leads.find(l => l.id === id);
   if (!currentLead) return;
@@ -1263,6 +1352,7 @@ async function openDetail(id) {
   renderLeadSequenceBox();
   updateTplPreview();
   loadCompanyNews();     // fire-and-forget so page renders instantly
+  updatePrevNextButtons();
   await loadTimeline();
 }
 
