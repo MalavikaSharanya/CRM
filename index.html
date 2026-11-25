@@ -447,8 +447,15 @@
 <div id="app">
   <aside class="sidebar">
     <div class="brand">Malavika&#39;s CRM</div>
+
+    <div class="client-switcher" id="client-switcher-wrap" style="margin: 0 4px 16px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;">
+      <div style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px">Working on</div>
+      <select id="active-client" style="margin: 0; font-size: 13px; padding: 6px 8px; width: 100%; font-weight: 600"></select>
+    </div>
+
     <nav class="nav">
       <div class="nav-group-label">Work</div>
+      <button class="tab" data-view="clients"><span class="lbl"><span class="ico">⬢</span> <span>Clients</span></span></button>
       <button class="tab active" data-view="today"><span class="lbl"><span class="ico">◎</span> <span>Today</span></span> <span class="badge" id="today-badge" style="display:none">0</span></button>
       <button class="tab" data-view="pipeline"><span class="lbl"><span class="ico">▦</span> <span>Pipeline</span></span></button>
       <button class="tab" data-view="due"><span class="lbl"><span class="ico">○</span> <span>Follow-ups due</span></span> <span class="badge" id="due-badge" style="display:none">0</span></button>
@@ -475,6 +482,142 @@
 
   <main class="main">
     <div class="stats" id="stats"></div>
+
+  <!-- CLIENTS VIEW -->
+  <div id="view-clients" style="display:none">
+    <div class="page-head">
+      <div class="page-title">Clients</div>
+      <div class="page-sub">Your Growth Ops Studio book — one pipeline per paying customer.</div>
+    </div>
+
+    <div class="controls">
+      <input type="search" id="client-search" placeholder="Search clients by name or domain...">
+      <select id="client-status-filter">
+        <option value="">All statuses</option>
+        <option value="pilot">Pilot</option>
+        <option value="retainer">Retainer</option>
+        <option value="paused">Paused</option>
+        <option value="churned">Churned</option>
+        <option value="won">Won</option>
+      </select>
+      <button id="new-client-btn">+ New client</button>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Pilot day</th>
+            <th>Leads</th>
+            <th>Meetings</th>
+            <th>Retainer / Fee</th>
+          </tr>
+        </thead>
+        <tbody id="clients-tbody"></tbody>
+      </table>
+      <div id="clients-empty" class="empty" style="display:none">
+        <span class="emoji">⬢</span>
+        <h3>No clients yet</h3>
+        <p>Add your first Growth Ops Studio client to start a pilot. Each client gets their own pipeline, sequences, and templates.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENT DETAIL VIEW -->
+  <div id="view-client-detail" style="display:none">
+    <div class="controls">
+      <button class="secondary" id="client-back-btn">← Back to clients</button>
+      <button class="secondary" id="client-edit-btn">Edit</button>
+      <button class="secondary" id="client-work-btn" style="background:var(--primary); color:#fff">Switch to this client</button>
+      <button class="secondary" id="client-delete-btn" style="color:#b91c1c; margin-left:auto">Delete</button>
+    </div>
+    <div class="card">
+      <div class="detail-head">
+        <div>
+          <h2 id="client-d-name"></h2>
+          <div class="sub" id="client-d-sub"></div>
+        </div>
+        <div><span class="pill" id="client-d-status"></span></div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-col">
+          <h3 class="section">Pilot terms</h3>
+          <div class="field-row"><div class="k">Status</div><div id="client-d-status2"></div></div>
+          <div class="field-row"><div class="k">Pilot started</div><div id="client-d-pilot-start"></div></div>
+          <div class="field-row"><div class="k">Retainer started</div><div id="client-d-retainer-start"></div></div>
+          <div class="field-row"><div class="k">Monthly retainer</div><div id="client-d-retainer"></div></div>
+          <div class="field-row"><div class="k">Per meeting fee</div><div id="client-d-fee"></div></div>
+          <div class="field-row"><div class="k">Approval state</div><div id="client-d-approval"></div></div>
+          <div class="field-row"><div class="k">Secondary domain</div><div id="client-d-sec-domain"></div></div>
+          <div class="field-row"><div class="k">Domain warmup started</div><div id="client-d-warmup"></div></div>
+        </div>
+        <div class="detail-col">
+          <h3 class="section">Brief</h3>
+          <div class="field-row"><div class="k">Ideal customer profile</div><div id="client-d-icp" style="white-space:pre-wrap"></div></div>
+          <div class="field-row"><div class="k">Decision makers</div><div id="client-d-dm" style="white-space:pre-wrap"></div></div>
+          <div class="field-row"><div class="k">Buying signals</div><div id="client-d-signals" style="white-space:pre-wrap"></div></div>
+          <div class="field-row"><div class="k">Qualified meeting definition</div><div id="client-d-meetdef" style="white-space:pre-wrap"></div></div>
+          <div class="field-row"><div class="k">Notes</div><div id="client-d-notes" style="white-space:pre-wrap"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENT EDIT MODAL -->
+  <div class="overlay" id="client-overlay">
+    <div class="modal" style="max-width: 640px">
+      <h2 id="client-modal-title">New client</h2>
+      <input type="text" id="c-name" placeholder="Client name (e.g. Acme Robotics) *">
+      <div class="two-col">
+        <input type="text" id="c-domain" placeholder="Primary domain (acme.com)">
+        <select id="c-status">
+          <option value="pilot">Status: pilot</option>
+          <option value="retainer">Retainer</option>
+          <option value="paused">Paused</option>
+          <option value="churned">Churned</option>
+          <option value="won">Won</option>
+        </select>
+      </div>
+      <div class="two-col">
+        <div>
+          <div style="font-size:11px; color:var(--muted); margin-bottom:4px">Pilot start date</div>
+          <input type="date" id="c-pilot-start">
+        </div>
+        <div>
+          <div style="font-size:11px; color:var(--muted); margin-bottom:4px">Retainer start date</div>
+          <input type="date" id="c-retainer-start">
+        </div>
+      </div>
+      <div class="two-col">
+        <input type="number" id="c-retainer" placeholder="Monthly retainer (€)" value="2000">
+        <input type="number" id="c-fee" placeholder="Per meeting fee (€)" value="200">
+      </div>
+      <select id="c-approval">
+        <option value="brief_pending">Approval: brief pending</option>
+        <option value="list_approved">Target list approved</option>
+        <option value="messaging_approved">Messaging approved</option>
+        <option value="live">Live — outreach running</option>
+      </select>
+      <div class="two-col">
+        <input type="text" id="c-sec-domain" placeholder="Secondary (outreach) domain">
+        <div>
+          <div style="font-size:11px; color:var(--muted); margin-bottom:4px">Domain warmup start</div>
+          <input type="date" id="c-warmup">
+        </div>
+      </div>
+      <textarea id="c-icp" placeholder="Ideal customer profile (from their brief)"></textarea>
+      <textarea id="c-dm" placeholder="Decision-makers to target"></textarea>
+      <textarea id="c-signals" placeholder="Buying signals (hiring, funding, product launch...)"></textarea>
+      <textarea id="c-meetdef" placeholder="Written definition of 'qualified meeting' (billing-critical)"></textarea>
+      <textarea id="c-notes" placeholder="Notes"></textarea>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px">
+        <button class="secondary" id="c-cancel">Cancel</button>
+        <button id="c-save">Save client</button>
+      </div>
+    </div>
+  </div>
 
   <!-- TODAY VIEW -->
   <div id="view-today">
@@ -763,6 +906,7 @@
       <option value="customer">Type: existing customer</option>
       <option value="partner">Type: partner</option>
     </select>
+    <select id="n-client" style="margin-bottom: 12px"></select>
     <select id="n-source">
       <option value="other">Source: other</option>
       <option value="linkedin_post">From a LinkedIn post</option>
@@ -920,6 +1064,8 @@ function esc(s) {
 // ===================== AUTH =====================
 async function init() {
   fillStageSelects();
+  const sw = $('active-client');
+  if (sw) sw.addEventListener('change', onClientSwitched);
   const isel = document.getElementById('filter-industry');
   if (isel) isel.innerHTML = '<option value="">All industries</option>' + INDUSTRIES.map(i => '<option>' + i + '</option>').join('');
   const nsel = document.getElementById('filter-infra');
@@ -948,6 +1094,8 @@ $('logout-btn').addEventListener('click', async () => {
 async function showApp() {
   $('login-screen').style.display = 'none';
   $('app').classList.add('on');
+  await loadClients();
+  await loadMeetings();
   await loadSequences();
   await loadTemplates();
   await loadLeads();
@@ -971,25 +1119,22 @@ async function loadLeads() {
 
 function dueLeads() {
   const t = todayStr();
-  // customers ALWAYS count (check-ins/renewals matter after the win);
-  // prospects only while the deal is still alive
-  // a follow-up date fires for everyone except closed-won prospects —
-  // so "revisit in 6 months" on lost / not-interested leads still reminds you
-  return leads.filter(l => l.next_followup && l.next_followup <= t
+  return leads.filter(byActiveClient).filter(l => l.next_followup && l.next_followup <= t
     && (l.account_type === 'customer' || l.account_type === 'partner'
         || l.status !== 'won'));
 }
 
 // ===================== STATS =====================
 function renderStats() {
+  const scoped = leads.filter(byActiveClient);
   const by = {};
-  leads.forEach(l => { by[l.status] = (by[l.status] || 0) + 1; });
+  scoped.forEach(l => { by[l.status] = (by[l.status] || 0) + 1; });
   const due = dueLeads().length;
-  const customers = leads.filter(l => l.account_type === 'customer').length;
-  const partners = leads.filter(l => l.account_type === 'partner').length;
-  const active = leads.length - (by.won || 0) - (by.lost || 0) - (by.not_interested || 0) - customers - partners;
+  const customers = scoped.filter(l => l.account_type === 'customer').length;
+  const partners = scoped.filter(l => l.account_type === 'partner').length;
+  const active = scoped.length - (by.won || 0) - (by.lost || 0) - (by.not_interested || 0) - customers - partners;
   $('stats').innerHTML =
-    stat(leads.length, 'total', false, 'leads') +
+    stat(scoped.length, 'total', false, 'leads') +
     stat(active, 'active', false, 'leads') +
     stat(customers, 'customers', false, 'customers') +
     stat(partners, 'partners', false, 'partners') +
@@ -1025,7 +1170,7 @@ document.addEventListener('click', (e) => {
 function renderBoard() {
   const t = todayStr();
   $('board').innerHTML = STAGES.map(s => {
-    const items = leads.filter(l => l.status === s.value
+    const items = leads.filter(byActiveClient).filter(l => l.status === s.value
     && l.account_type !== 'customer' && l.account_type !== 'partner');
     const cards = items.map(l => {
       const overdue = l.next_followup && l.next_followup < t && !CLOSED.includes(s.value);
@@ -1050,10 +1195,12 @@ $('board').addEventListener('click', (e) => {
 
 // ===================== ACTIVITY FEED =====================
 async function loadActivity() {
-  const { data, error } = await db.from('interactions')
+  let q = db.from('interactions')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(15);
+  if (activeClientId !== null) q = q.eq('client_id', activeClientId);
+  const { data, error } = await q;
   if (error) { $('activity-feed').innerHTML = '<div class="t-item">' + esc(error.message) + '</div>'; return; }
   if (!data.length) {
     $('activity-feed').innerHTML = '<div class="empty" style="padding:40px 20px"><span class="emoji">◌</span><h3>Nothing logged yet</h3><p>Open a lead, use the armed logger — every touch shows up here.</p></div>';
@@ -1082,10 +1229,11 @@ function renderTable() {
   const fb = $('filter-bounce').value;
   const findustry = $('filter-industry').value;
   const finfra = $('filter-infra').value;
+  let base = leads.filter(byActiveClient);
   let rows = currentView === 'due' ? dueLeads()
-    : currentView === 'customers' ? leads.filter(l => l.account_type === 'customer')
-    : currentView === 'partners' ? leads.filter(l => l.account_type === 'partner')
-    : leads;
+    : currentView === 'customers' ? base.filter(l => l.account_type === 'customer')
+    : currentView === 'partners' ? base.filter(l => l.account_type === 'partner')
+    : base;
   rows = rows.filter(l =>
     (!q || (l.name + ' ' + (l.company || '') + ' ' + (l.email || '')).toLowerCase().includes(q)) &&
     (!fs || l.status === fs) &&
@@ -1283,6 +1431,8 @@ document.querySelectorAll('.tab').forEach(tab => {
     $('view-today').style.display = v === 'today' ? 'block' : 'none';
     $('view-pipeline').style.display = v === 'pipeline' ? 'block' : 'none';
     $('view-sequences').style.display = v === 'sequences' ? 'block' : 'none';
+    $('view-clients').style.display = v === 'clients' ? 'block' : 'none';
+    $('view-client-detail').style.display = 'none';
     $('view-leads').style.display = (v === 'leads' || v === 'due' || v === 'customers' || v === 'partners') ? 'block' : 'none';
     $('view-import').style.display = v === 'import' ? 'block' : 'none';
     $('view-templates').style.display = v === 'templates' ? 'block' : 'none';
@@ -1299,6 +1449,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (v === 'sync') renderSyncPreview();
     if (v === 'today') renderToday();
     if (v === 'sequences') renderSequenceEditor();
+    if (v === 'clients') renderClientsList();
   });
 });
 
@@ -1401,6 +1552,8 @@ async function openDetail(id) {
   $('view-analytics').style.display = 'none';
   $('view-sync').style.display = 'none';
   $('view-sequences').style.display = 'none';
+  $('view-clients').style.display = 'none';
+  $('view-client-detail').style.display = 'none';
   $('view-detail').style.display = 'block';
 
   $('d-name').textContent = currentLead.name;
@@ -1665,6 +1818,7 @@ $('log-save').addEventListener('click', async () => {
 
   const { error } = await db.from('interactions').insert({
     lead_id: currentLead.id,
+    client_id: currentLead.client_id,
     type: selectedLogType,
     notes: notes
   });
@@ -1756,8 +1910,9 @@ $('d-tpl-copy').addEventListener('click', async () => {
 
 // --- the manager tab ---
 function renderTemplateList() {
-  $('tpl-list').innerHTML = templates.length
-    ? templates.map(t =>
+  const visible = templates.filter(t => t.client_id == null || t.client_id === activeClientId);
+  $('tpl-list').innerHTML = visible.length
+    ? visible.map(t =>
         '<div class="t-item" style="padding:14px 20px">' +
           '<span class="pill st-contacted">' + t.channel + '</span> <strong>' + esc(t.title) + '</strong>' +
           '<div class="muted" style="font-size:13px; white-space:pre-wrap; margin:6px 0">' + esc(t.body) + '</div>' +
@@ -1808,7 +1963,7 @@ $('tpl-save').addEventListener('click', async () => {
   const payload = { title: title, channel: $('tpl-channel').value, body: body };
   const { error } = editingTplId
     ? await db.from('templates').update(payload).eq('id', editingTplId)
-    : await db.from('templates').insert(payload);
+    : await db.from('templates').insert({ ...payload, client_id: activeClientId });
   if (error) { toast(error.message); return; }
 
   $('tpl-cancel').click();   // reset the form
@@ -1892,6 +2047,212 @@ function renderGame() {
     '</div>';
 }
 
+// ===================== CLIENTS (multi-tenant) =====================
+function pilotDay(c) {
+  if (!c.pilot_start_date) return null;
+  const start = new Date(c.pilot_start_date);
+  return Math.floor((Date.now() - start.getTime()) / 86400000) + 1;
+}
+
+function clientStatusPill(status) {
+  const map = {
+    pilot: 'st-contacted',
+    retainer: 'st-won',
+    paused: 'st-lost',
+    churned: 'st-not_interested',
+    won: 'st-won'
+  };
+  return '<span class="pill ' + (map[status] || 'st-new') + '">' + (status || 'pilot') + '</span>';
+}
+
+function renderClientsList() {
+  const q = ($('client-search').value || '').toLowerCase();
+  const fs = $('client-status-filter').value;
+  let rows = clients.filter(c =>
+    (!q || (c.name + ' ' + (c.domain || '')).toLowerCase().includes(q)) &&
+    (!fs || c.status === fs)
+  );
+  $('clients-empty').style.display = rows.length === 0 && clients.length === 0 ? 'block' : 'none';
+
+  $('clients-tbody').innerHTML = rows.map(c => {
+    const day = pilotDay(c);
+    const leadsCount = leads.filter(l => l.client_id === c.id).length;
+    const meetingsCount = meetings.filter(m => m.client_id === c.id && m.qualified).length;
+    return '<tr data-id="' + c.id + '">' +
+      '<td><strong>' + esc(c.name) + '</strong>' +
+        (c.domain ? '<div class="muted" style="font-size:12px">' + esc(c.domain) + '</div>' : '') +
+      '</td>' +
+      '<td>' + clientStatusPill(c.status) + '</td>' +
+      '<td class="muted">' + (day !== null ? 'Day ' + day + (c.status === 'pilot' ? ' / 60' : '') : '—') + '</td>' +
+      '<td class="muted">' + leadsCount + '</td>' +
+      '<td class="muted">' + meetingsCount + ' qualified</td>' +
+      '<td class="muted">€' + (c.monthly_retainer || 2000) + ' / €' + (c.per_meeting_fee || 200) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+$('client-search').addEventListener('input', renderClientsList);
+$('client-status-filter').addEventListener('input', renderClientsList);
+
+$('clients-tbody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr');
+  if (tr) openClientDetail(Number(tr.dataset.id));
+});
+
+$('new-client-btn').addEventListener('click', () => openClientModal(null));
+
+function fillLeadClientPicker(selectedId) {
+  const sel = document.getElementById('n-client');
+  if (!sel) return;
+  const opts = ['<option value="">— unassigned —</option>'];
+  clients.forEach(c => {
+    opts.push('<option value="' + c.id + '"' + (c.id === selectedId ? ' selected' : '') + '>Client: ' + esc(c.name) + '</option>');
+  });
+  sel.innerHTML = opts.join('');
+}
+
+function openClientModal(clientId) {
+  editingClientId = clientId;
+  $('client-modal-title').textContent = clientId ? 'Edit client' : 'New client';
+  const c = clientId ? clients.find(x => x.id === clientId) : {};
+  $('c-name').value = c.name || '';
+  $('c-domain').value = c.domain || '';
+  $('c-status').value = c.status || 'pilot';
+  $('c-pilot-start').value = c.pilot_start_date || '';
+  $('c-retainer-start').value = c.retainer_start_date || '';
+  $('c-retainer').value = c.monthly_retainer != null ? c.monthly_retainer : 2000;
+  $('c-fee').value = c.per_meeting_fee != null ? c.per_meeting_fee : 200;
+  $('c-approval').value = c.approval_state || 'brief_pending';
+  $('c-sec-domain').value = c.secondary_domain || '';
+  $('c-warmup').value = c.domain_warmup_start || '';
+  $('c-icp').value = c.icp || '';
+  $('c-dm').value = c.decision_makers || '';
+  $('c-signals').value = c.buying_signals || '';
+  $('c-meetdef').value = c.meeting_definition || '';
+  $('c-notes').value = c.notes || '';
+  $('client-overlay').classList.add('open');
+}
+
+$('c-cancel').addEventListener('click', () => $('client-overlay').classList.remove('open'));
+
+$('c-save').addEventListener('click', async () => {
+  const name = $('c-name').value.trim();
+  if (!name) { toast('Client name required'); return; }
+  const payload = {
+    name: name,
+    domain: $('c-domain').value.trim() || null,
+    status: $('c-status').value,
+    pilot_start_date: $('c-pilot-start').value || null,
+    retainer_start_date: $('c-retainer-start').value || null,
+    monthly_retainer: Number($('c-retainer').value) || 2000,
+    per_meeting_fee: Number($('c-fee').value) || 200,
+    approval_state: $('c-approval').value,
+    secondary_domain: $('c-sec-domain').value.trim() || null,
+    domain_warmup_start: $('c-warmup').value || null,
+    icp: $('c-icp').value.trim() || null,
+    decision_makers: $('c-dm').value.trim() || null,
+    buying_signals: $('c-signals').value.trim() || null,
+    meeting_definition: $('c-meetdef').value.trim() || null,
+    notes: $('c-notes').value.trim() || null
+  };
+  if (editingClientId) {
+    const { error } = await db.from('clients').update(payload).eq('id', editingClientId);
+    if (error) { toast(error.message); return; }
+    const c = clients.find(x => x.id === editingClientId);
+    if (c) Object.assign(c, payload);
+    toast('Client updated');
+  } else {
+    const { data, error } = await db.from('clients').insert(payload).select().single();
+    if (error) { toast(error.message); return; }
+    clients.push(data);
+    clients.sort((a, b) => a.name.localeCompare(b.name));
+    toast('Client created');
+  }
+  $('client-overlay').classList.remove('open');
+  renderClientSwitcher();
+  renderClientsList();
+  if (currentClient && currentClient.id === editingClientId) {
+    openClientDetail(editingClientId);
+  }
+});
+
+async function openClientDetail(id) {
+  currentClient = clients.find(c => c.id === id);
+  if (!currentClient) return;
+  const c = currentClient;
+  const day = pilotDay(c);
+  $('client-d-name').textContent = c.name;
+  $('client-d-sub').textContent = [c.domain, 'Pilot day ' + (day !== null ? day : '—')].filter(Boolean).join(' · ');
+  $('client-d-status').className = 'pill ' + (c.status === 'pilot' ? 'st-contacted' : c.status === 'retainer' || c.status === 'won' ? 'st-won' : c.status === 'paused' ? 'st-lost' : 'st-not_interested');
+  $('client-d-status').textContent = c.status || '—';
+  $('client-d-status2').textContent = c.status || '—';
+  $('client-d-pilot-start').textContent = c.pilot_start_date || '—';
+  $('client-d-retainer-start').textContent = c.retainer_start_date || '—';
+  $('client-d-retainer').textContent = '€' + (c.monthly_retainer || 0);
+  $('client-d-fee').textContent = '€' + (c.per_meeting_fee || 0) + ' per qualified meeting';
+  $('client-d-approval').textContent = (c.approval_state || '').replace(/_/g, ' ');
+  $('client-d-sec-domain').textContent = c.secondary_domain || '—';
+  $('client-d-warmup').textContent = c.domain_warmup_start || '—';
+  $('client-d-icp').textContent = c.icp || '—';
+  $('client-d-dm').textContent = c.decision_makers || '—';
+  $('client-d-signals').textContent = c.buying_signals || '—';
+  $('client-d-meetdef').textContent = c.meeting_definition || '—';
+  $('client-d-notes').textContent = c.notes || '—';
+
+  hideAllViews();
+  $('view-client-detail').style.display = 'block';
+}
+
+$('client-back-btn').addEventListener('click', () => {
+  currentClient = null;
+  hideAllViews();
+  $('view-clients').style.display = 'block';
+  renderClientsList();
+});
+
+$('client-edit-btn').addEventListener('click', () => {
+  if (currentClient) openClientModal(currentClient.id);
+});
+
+$('client-work-btn').addEventListener('click', () => {
+  if (!currentClient) return;
+  activeClientId = currentClient.id;
+  localStorage.setItem('activeClientId', String(activeClientId));
+  renderClientSwitcher();
+  renderStats(); renderTable(); renderBoard(); renderToday(); loadActivity(); loadGameData();
+  toast('Switched to ' + currentClient.name);
+  // Jump to Today for this client
+  const tab = document.querySelector('.tab[data-view="today"]');
+  if (tab) tab.click();
+});
+
+$('client-delete-btn').addEventListener('click', async () => {
+  if (!currentClient) return;
+  const leadCount = leads.filter(l => l.client_id === currentClient.id).length;
+  if (!confirm('Delete ' + currentClient.name + '? ' + leadCount + ' lead(s) will be un-assigned (not deleted).')) return;
+  // Un-assign leads first (set client_id to null) then delete the client
+  await db.from('leads').update({ client_id: null }).eq('client_id', currentClient.id);
+  const { error } = await db.from('clients').delete().eq('id', currentClient.id);
+  if (error) { toast(error.message); return; }
+  clients = clients.filter(c => c.id !== currentClient.id);
+  leads.forEach(l => { if (l.client_id === currentClient.id) l.client_id = null; });
+  if (activeClientId === currentClient.id) {
+    activeClientId = clients.length ? clients[0].id : null;
+    localStorage.setItem('activeClientId', activeClientId === null ? 'null' : String(activeClientId));
+  }
+  currentClient = null;
+  renderClientSwitcher();
+  $('client-back-btn').click();
+  toast('Client deleted');
+});
+
+function hideAllViews() {
+  ['view-today','view-pipeline','view-leads','view-import','view-templates','view-analytics','view-sync','view-sequences','view-clients','view-client-detail','view-detail'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
 // ===================== SEQUENCES =====================
 async function loadSequences() {
   const { data, error } = await db.from('sequences').select('*').order('id');
@@ -1899,6 +2260,65 @@ async function loadSequences() {
   sequences = data || [];
   editingSequence = sequences[0] || null;
 }
+
+// ===================== MULTI-CLIENT: LOAD + SWITCHER =====================
+async function loadClients() {
+  const { data, error } = await db.from('clients').select('*').order('name');
+  if (error) { clients = []; return; }
+  clients = data || [];
+  // Restore last-selected client from localStorage, or default to first client
+  const saved = localStorage.getItem('activeClientId');
+  const parsed = saved === 'null' ? null : (saved ? Number(saved) : null);
+  if (parsed === null && clients.length > 0 && saved !== 'null') {
+    activeClientId = clients[0].id;
+  } else {
+    activeClientId = parsed;
+    // Validate: if the saved client no longer exists, fall back to first
+    if (activeClientId !== null && !clients.find(c => c.id === activeClientId)) {
+      activeClientId = clients.length ? clients[0].id : null;
+    }
+  }
+  renderClientSwitcher();
+}
+
+async function loadMeetings() {
+  const { data, error } = await db.from('meetings').select('*').order('scheduled_for', { ascending: false });
+  if (error) { meetings = []; return; }
+  meetings = data || [];
+}
+
+function renderClientSwitcher() {
+  const sel = $('active-client');
+  if (!sel) return;
+  const opts = ['<option value="__all__">All clients</option>'];
+  clients.forEach(c => {
+    opts.push('<option value="' + c.id + '"' + (c.id === activeClientId ? ' selected' : '') + '>' +
+      esc(c.name) + '</option>');
+  });
+  if (clients.length === 0) {
+    opts.push('<option value="">(none yet)</option>');
+  }
+  sel.innerHTML = opts.join('');
+  if (activeClientId === null) sel.value = '__all__';
+}
+
+function onClientSwitched() {
+  const v = $('active-client').value;
+  activeClientId = (v === '__all__' || v === '') ? null : Number(v);
+  localStorage.setItem('activeClientId', activeClientId === null ? 'null' : String(activeClientId));
+  // Refresh everything that depends on the active client
+  renderStats();
+  renderTable();
+  renderBoard();
+  renderToday();
+  loadActivity();
+  loadGameData();
+  updateSyncBadge();
+  // If we're on a view that shows client-scoped data, refresh it
+  if (currentView === 'sequences') renderSequenceEditor();
+  if (currentView === 'templates') renderTemplateList();
+}
+
 
 // Which touches are due for each enrolled lead today (or overdue).
 // Returns { total, byChannel: { call: [...], email: [...], ... } }
@@ -1909,6 +2329,7 @@ function todaysActions() {
   const batchSize = (sequences[0] && sequences[0].batch_size) || 20;
 
   for (const l of leads) {
+    if (!byActiveClient(l)) continue;
     if (!l.sequence_id || l.sequence_paused) continue;
     if (l.status === 'won' || l.status === 'lost' || l.status === 'not_interested') continue;
     if (l.email_bounced) continue;
@@ -2015,12 +2436,13 @@ document.addEventListener('click', async (e) => {
 
 // ===================== SEQUENCE EDITOR =====================
 function renderSequenceEditor() {
-  // Populate the sequence picker
+  // Populate the sequence picker — only sequences for the active client (or unscoped/shared)
   const picker = $('seq-picker');
   if (picker) {
-    picker.innerHTML = sequences.length
-      ? sequences.map(sq => '<option value="' + sq.id + '"' + (editingSequence && sq.id === editingSequence.id ? ' selected' : '') + '>' + esc(sq.name) + '</option>').join('')
-      : '<option value="">— no sequences yet —</option>';
+    const visible = sequences.filter(sq => sq.client_id == null || sq.client_id === activeClientId);
+    picker.innerHTML = visible.length
+      ? visible.map(sq => '<option value="' + sq.id + '"' + (editingSequence && sq.id === editingSequence.id ? ' selected' : '') + '>' + esc(sq.name) + (sq.client_id == null ? ' (shared)' : '') + '</option>').join('')
+      : '<option value="">— no sequences for this client yet —</option>';
   }
 
   // Hint if she has no templates yet (so the Template column will be empty)
@@ -2124,7 +2546,7 @@ document.addEventListener('click', async (e) => {
     const name = prompt('Name this sequence:', 'New sequence');
     if (!name) return;
     const { data, error } = await db.from('sequences')
-      .insert({ name: name, steps: [], batch_size: 20 })
+      .insert({ name: name, steps: [], batch_size: 20, client_id: activeClientId })
       .select().single();
     if (error) { toast(error.message); return; }
     sequences.push(data);
@@ -2313,7 +2735,7 @@ const XLSX_COLS = [
 let lastExportedIds = [];   // remembered so "Re-export last batch" can repeat
 
 function eligibleForSync() {
-  return leads.filter(l =>
+  return leads.filter(byActiveClient).filter(l =>
     l.status === 'new' &&
     l.account_type === 'prospect' &&
     !l.email_bounced &&
@@ -2497,6 +2919,7 @@ $('add-lead-btn').addEventListener('click', () => {
   $('modal-title').textContent = 'Add lead';
   ['n-name','n-company','n-title','n-email','n-phone','n-linkedin','n-notes'].forEach(id => $(id).value = '');
   $('n-source').value = 'other';
+  fillLeadClientPicker(activeClientId);
   $('n-industry').value = '';
   renderInfraBoxes([]);
   $('n-type').value = currentView === 'customers' ? 'customer'
@@ -2508,6 +2931,7 @@ $('edit-lead-btn').addEventListener('click', () => {
   if (!currentLead) return;
   editingLeadId = currentLead.id;
   $('modal-title').textContent = 'Edit lead';
+  fillLeadClientPicker(currentLead.client_id);
   $('n-name').value = currentLead.name || '';
   $('n-company').value = currentLead.company || '';
   $('n-title').value = currentLead.title || '';
@@ -2531,6 +2955,7 @@ $('add-save').addEventListener('click', async () => {
   const name = $('n-name').value.trim();
   if (!name) { toast('Name is required'); return; }
 
+  const selectedClient = $('n-client').value;
   const lead = {
     name: name,
     company: $('n-company').value.trim() || null,
@@ -2542,7 +2967,8 @@ $('add-save').addEventListener('click', async () => {
     account_type: $('n-type').value,
     industry: $('n-industry').value || null,
     infrastructure: readInfraSelection(),
-    notes: $('n-notes').value.trim() || null
+    notes: $('n-notes').value.trim() || null,
+    client_id: selectedClient === '' ? null : Number(selectedClient)
   };
 
   if (editingLeadId) {
